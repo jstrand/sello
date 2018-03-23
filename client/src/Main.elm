@@ -13,7 +13,25 @@ type alias ReportInput =
   , stop: String
   }
 
+saveDate input date =
+  { input | date = date }
+
+saveStart input start =
+  { input | start = start }
+
+saveStop input stop =
+  { input | stop = stop }
+
 emptyInput = ReportInput "" "" ""
+
+inputToReport : ReportInput -> Report
+inputToReport reportInput =
+  let
+    date = Date.fromISO8601 reportInput.date |> Result.withDefault (Date.date 2000 1 1)
+    start = timeOfDay reportInput.start
+    stop = timeOfDay reportInput.stop
+  in
+    Report date start
 
 type alias Model =
   { reports: List Report
@@ -25,33 +43,64 @@ type Msg
     = StartAdd
     | CancelAdd
     | ConfirmAdd
+    | InputDate String
+    | InputStart String
+    | InputStop String
 
 startReportInput model =
   { model | adding = Just emptyInput }
 
 cancelReportInput model = 
-  { model | adding = Nothing}
+  { model | adding = Nothing }
+
+saveReportInput model =
+  case model.adding of
+    Nothing -> model
+    Just input ->
+      { model
+      | adding = Nothing
+      , reports = model.reports ++ [inputToReport input]
+      }
+
+saveModelDate date model =
+  case model.adding of
+    Nothing -> model
+    Just input ->
+      { model
+      | adding = Just <| saveDate input date}
+
+saveModelStart start model =
+  case model.adding of
+    Nothing -> model
+    Just input ->
+      { model
+      | adding = Just <| saveStart input start}
+
+saveModelStop stop model =
+  case model.adding of
+    Nothing -> model
+    Just input ->
+      { model
+      | adding = Just <| saveStop input stop}
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     StartAdd -> (startReportInput model, Cmd.none)
     CancelAdd -> (cancelReportInput model, Cmd.none)
-    ConfirmAdd -> (cancelReportInput model, Cmd.none)
+    ConfirmAdd -> (saveReportInput model, Cmd.none)
+    InputDate date -> (saveModelDate date model, Cmd.none)
+    InputStart start -> (saveModelStart start model, Cmd.none)
+    InputStop stop -> (saveModelStop stop model, Cmd.none)
 
--- Use a real implementation...
 viewDate : Date -> String
-viewDate date =
-  [Date.year date, Date.month date, Date.day date]
-  |> List.map toString
-  |> List.intersperse "-"
-  |> String.concat
+viewDate = Date.toISO8601
 
 viewReport : Report -> Html Msg
 viewReport report = Html.tr []
   [ Html.td [] [Html.text <| viewDate <| report.date]
   , Html.td [] [Html.text <| toString <| Date.weekday report.date]
-  , Html.td [] []
+  , Html.td [] [Html.text <| timeString <| report.start]
   , Html.td [] []
   , Html.td [] []
   ]
@@ -66,10 +115,10 @@ reportHeaders =
   ]
 
 viewReportInput input = Html.tr []
-  [ Html.td [] [Html.input [] []]
+  [ Html.td [] [Html.input [Events.onInput InputDate] []]
   , Html.td [] []
-  , Html.td [] [Html.input [] []]
-  , Html.td [] [Html.input [] []]
+  , Html.td [] [Html.input [Events.onInput InputStart] []]
+  , Html.td [] [Html.input [Events.onInput InputStop] []]
   , Html.td [] [viewOkButton, viewCancelButton]
   ]
 
