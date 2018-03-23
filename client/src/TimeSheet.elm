@@ -1,12 +1,15 @@
 module TimeSheet exposing (..)
 
-
-import Time exposing (..)
 import Time.Date exposing (..)
 
+type alias TimeOfDay =
+  { hour: Int
+  , minute: Int
+  }
 
 type alias Report =
-  { start: Time
+  { date: Date
+  , start: TimeOfDay
   -- , end: Time
   }
 
