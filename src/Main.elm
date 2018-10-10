@@ -1,11 +1,12 @@
 import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
-
-import TimeSheet exposing (..)
-import Time.Date as Date exposing (Date, date)
+import Browser
+import Time
+import DateFormat
 import Dict exposing (Dict)
 
+import TimeSheet exposing (..)
 
 type alias ReportInput =
   { date: String
@@ -27,7 +28,7 @@ emptyInput = ReportInput "" "" ""
 inputToReport : ReportInput -> Report
 inputToReport reportInput =
   let
-    date = Date.fromISO8601 reportInput.date |> Result.withDefault (Date.date 2000 1 1)
+    date = Time.millisToPosix 0 -- Date.fromISO8601 reportInput.date |> Result.withDefault (Date.date 2000 1 1)
     start = timeOfDay reportInput.start
     stop = timeOfDay reportInput.stop
   in
@@ -35,7 +36,6 @@ inputToReport reportInput =
 
 type alias Model =
   { reports: List Report
-  , startDay: Date
   , adding: Maybe ReportInput
   }
 
@@ -93,13 +93,20 @@ update msg model =
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
 
-viewDate : Date -> String
-viewDate = Date.toISO8601
+
+viewDate posix =
+  DateFormat.format
+    [ DateFormat.yearNumber
+    , DateFormat.monthFixed
+    , DateFormat.dayOfMonthFixed
+    ]
+    Time.utc
+    posix
+
 
 viewReport : Report -> Html Msg
 viewReport report = Html.tr []
   [ Html.td [] [Html.text <| viewDate <| report.date]
-  , Html.td [] [Html.text <| toString <| Date.weekday report.date]
   , Html.td [] [Html.text <| timeString <| report.start]
   , Html.td [] []
   , Html.td [] []
@@ -132,9 +139,10 @@ viewAddOrInput maybeInput =
     Nothing -> viewAddButton
     Just input -> viewReportInput input
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-  Html.div []
+  Browser.Document
+    "Sello"
     [ Html.table []
       (reportHeaders
       ++ (List.map viewReport model.reports)
@@ -148,15 +156,15 @@ subscriptions model = Sub.none
 
 
 initReports =
-  [Report (date 2018 03 24) (TimeOfDay 8 0)]
+  [Report (Time.millisToPosix 0) (TimeOfDay 0 0)]
 
 
-init : (Model, Cmd Msg)
-init = (Model initReports (date 2017 03 01) Nothing, Cmd.none)
+init : () -> (Model, Cmd Msg)
+init _ = (Model initReports Nothing, Cmd.none)
 
 
 main =
-  Html.program
+  Browser.document
     { init = init
     , view = view
     , update = update
