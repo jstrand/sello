@@ -9,8 +9,7 @@ type alias Minutes = Int
 type alias Hours = Int
 
 type alias Report =
-  { day: Date
-  , start: Minutes
+  { start: Minutes
   , minutesUntilStop: Minutes
   , pausedMinutes: Minutes
   }
@@ -40,7 +39,7 @@ testShowAsHoursAndMinutes =
   &&
   showAsHoursAndMinutes (hoursAndMinutes 0 0) == "00:00"
 
-testReport1 = Report (Date.fromCalendarDate 2018 Oct 12) (hours 8) (hours 9) (hours 1)
+testReport1 = Report (hours 8) (hours 9) (hours 1)
 
 testWorkedMinutes =
     workedMinutes testReport1 == hours 8

@@ -10,7 +10,7 @@ import Date exposing (Date)
 import Report exposing (..)
 
 type alias ReportInput =
-  { date: String
+  { date: Date
   , start: String
   , stop: String
   }
@@ -24,11 +24,18 @@ saveStart input start =
 saveStop input stop =
   { input | stop = stop }
 
-emptyInput = ReportInput "" "" ""
 
 inputToReport : ReportInput -> Report
 inputToReport reportInput =
   Report.parseReport reportInput.start reportInput.stop
+
+reportToInput : Date -> Report -> ReportInput
+reportToInput date report =
+  ReportInput date (showAsHoursAndMinutes report.start) (showAsHoursAndMinutes (Report.getEnd report))
+
+defaultInput : Date -> ReportInput
+defaultInput date =
+  ReportInput date "08:00" "17:00"
 
 dates : List Date
 dates =
@@ -38,74 +45,114 @@ dates =
   in
     Date.range Date.Day 1 start stop
 
+type alias ReportDict = Dict Int Report
 
 type alias Model =
-  { reports: List Report
-  , adding: Maybe ReportInput
+  { reports: ReportDict
+  , editing: Maybe ReportInput
   }
 
+saveReport : ReportInput -> ReportDict -> ReportDict
+saveReport reportInput reports =
+  Dict.insert (Date.toRataDie reportInput.date) (inputToReport reportInput) reports
+
+getReport : ReportDict -> Date -> Maybe Report
+getReport reports date =
+  Dict.get (Date.toRataDie date) reports
+
+getReportInput : ReportDict -> Date -> ReportInput
+getReportInput reports date =
+  getReport reports date
+  |> Maybe.map (reportToInput date)
+  |> Maybe.withDefault (defaultInput date)
+
 type Msg
-    = StartAdd
-    | CancelAdd
-    | ConfirmAdd
-    | InputDate String
+    = StartEdit Date
+    | CancelEdit
+    | SaveEdit
     | InputStart String
     | InputStop String
 
-startReportInput model =
-  { model | adding = Just emptyInput }
+startReportInput model date =
+  { model | editing = Just (getReportInput model.reports date) }
 
 cancelReportInput model = 
-  { model | adding = Nothing }
+  { model | editing = Nothing }
 
+saveReportInput : Model -> Model
 saveReportInput model =
-  case model.adding of
+  case model.editing of
     Nothing -> model
     Just input ->
       { model
-      | adding = Nothing
-      , reports = model.reports ++ [inputToReport input]
+      | editing = Nothing
+      , reports = saveReport input model.reports
       }
 
-saveModelDate date model =
-  case model.adding of
-    Nothing -> model
-    Just input ->
-      { model
-      | adding = Just <| saveDate input date}
-
 saveModelStart start model =
-  case model.adding of
+  case model.editing of
     Nothing -> model
     Just input ->
       { model
-      | adding = Just <| saveStart input start}
+      | editing = Just <| saveStart input start}
 
 saveModelStop stop model =
-  case model.adding of
+  case model.editing of
     Nothing -> model
     Just input ->
       { model
-      | adding = Just <| saveStop input stop}
+      | editing = Just <| saveStop input stop}
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    StartAdd -> (startReportInput model, Cmd.none)
-    CancelAdd -> (cancelReportInput model, Cmd.none)
-    ConfirmAdd -> (saveReportInput model, Cmd.none)
-    InputDate date -> (saveModelDate date model, Cmd.none)
+    StartEdit date -> (startReportInput model date, Cmd.none)
+    CancelEdit -> (cancelReportInput model, Cmd.none)
+    SaveEdit -> (saveReportInput model, Cmd.none)
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
 
+viewEmptyDay : Date -> Html Msg
+viewEmptyDay day =
+  Html.tr []
+    [ Html.td [] [Html.text <| Date.toIsoString day]
+    , Html.td [] []
+    , Html.td [] []
+    , Html.td [] [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
+    ]
 
-viewDay : Date -> Html Msg
-viewDay day = Html.tr []
-   [ Html.td [] [Html.text <| Date.toIsoString day]
-   , Html.td [] []
-   , Html.td [] []
-   , Html.td [] [Html.button [] [Html.text "Edit"]]
-   ]
+viewDay : Date -> Report -> Html Msg
+viewDay day report =
+  Html.tr []
+    [ Html.td [] [Html.text <| Date.toIsoString day]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.start]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getEnd report]
+    , Html.td [] [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
+    ]
+
+viewOkButton = Html.button [Events.onClick SaveEdit] [Html.text "Ok"]
+viewCancelButton = Html.button [Events.onClick CancelEdit] [Html.text "Cancel"]
+
+editDay : ReportInput -> Html Msg
+editDay input =
+  Html.tr []
+    [ Html.td [] [Html.text <| Date.toIsoString input.date]
+    , Html.td [] [Html.input [Events.onInput InputStart] [Html.text <| input.start]]
+    , Html.td [] [Html.input [Events.onInput InputStop] [Html.text <| input.stop]]
+    , Html.td [] [viewOkButton, viewCancelButton]
+    ]
+
+viewOrEditDay : Model -> Date -> Html Msg
+viewOrEditDay model day =
+  let report = getReport model.reports day
+      viewDayOrEmpty =
+        report
+        |> Maybe.map (viewDay day)
+        |> Maybe.withDefault (viewEmptyDay day)
+  in
+    case model.editing of
+      Nothing -> viewDayOrEmpty
+      Just input -> if day == input.date then editDay input else viewDayOrEmpty
 
 reportHeaders =
   [ Html.th [] [Html.text "Date"]
@@ -115,23 +162,6 @@ reportHeaders =
   , Html.th [] [Html.text "Diff"]
   ]
 
-viewReportInput input = Html.tr []
-  [ Html.td [] [Html.input [Events.onInput InputDate] []]
-  , Html.td [] []
-  , Html.td [] [Html.input [Events.onInput InputStart] []]
-  , Html.td [] [Html.input [Events.onInput InputStop] []]
-  , Html.td [] [viewOkButton, viewCancelButton]
-  ]
-
-viewAddButton = Html.button [Events.onClick StartAdd] [Html.text "Add"]
-
-viewOkButton = Html.button [Events.onClick ConfirmAdd] [Html.text "Ok"]
-viewCancelButton = Html.button [Events.onClick CancelAdd] [Html.text "Cancel"]
-
-viewAddOrInput maybeInput =
-  case maybeInput of
-    Nothing -> viewAddButton
-    Just input -> viewReportInput input
 
 view : Model -> Browser.Document Msg
 view model =
@@ -139,8 +169,7 @@ view model =
     "Sello"
     [ Html.table []
       (reportHeaders
-      ++ (List.map viewDay dates)
-      ++ [viewAddOrInput model.adding]
+      ++ (List.map (viewOrEditDay model) dates)
       )
     ]
 
@@ -150,7 +179,7 @@ subscriptions model = Sub.none
 
 
 initReports =
-  []
+  Dict.empty
 
 
 init : () -> (Model, Cmd Msg)
