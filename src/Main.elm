@@ -5,8 +5,9 @@ import Browser
 import Time
 import DateFormat
 import Dict exposing (Dict)
+import Date exposing (Date)
 
-import TimeSheet exposing (..)
+import Report exposing (..)
 
 type alias ReportInput =
   { date: String
@@ -27,12 +28,16 @@ emptyInput = ReportInput "" "" ""
 
 inputToReport : ReportInput -> Report
 inputToReport reportInput =
-  let
-    date = Time.millisToPosix 0 -- Date.fromISO8601 reportInput.date |> Result.withDefault (Date.date 2000 1 1)
-    start = timeOfDay reportInput.start
-    stop = timeOfDay reportInput.stop
+  Report.parseReport reportInput.start reportInput.stop
+
+dates : List Date
+dates =
+  let dayInInterval = Date.fromCalendarDate 2018 Time.Oct 12
+      start = Date.floor Date.Year dayInInterval
+      stop = Date.ceiling Date.Year dayInInterval
   in
-    Report date start
+    Date.range Date.Day 1 start stop
+
 
 type alias Model =
   { reports: List Report
@@ -94,24 +99,13 @@ update msg model =
     InputStop stop -> (saveModelStop stop model, Cmd.none)
 
 
-viewDate posix =
-  DateFormat.format
-    [ DateFormat.yearNumber
-    , DateFormat.monthFixed
-    , DateFormat.dayOfMonthFixed
-    ]
-    Time.utc
-    posix
-
-
-viewReport : Report -> Html Msg
-viewReport report = Html.tr []
-  [ Html.td [] [Html.text <| viewDate <| report.date]
-  , Html.td [] [Html.text <| timeString <| report.start]
-  , Html.td [] []
-  , Html.td [] []
-  ]
-
+viewDay : Date -> Html Msg
+viewDay day = Html.tr []
+   [ Html.td [] [Html.text <| Date.toIsoString day]
+   , Html.td [] []
+   , Html.td [] []
+   , Html.td [] [Html.button [] [Html.text "Edit"]]
+   ]
 
 reportHeaders =
   [ Html.th [] [Html.text "Date"]
@@ -145,7 +139,7 @@ view model =
     "Sello"
     [ Html.table []
       (reportHeaders
-      ++ (List.map viewReport model.reports)
+      ++ (List.map viewDay dates)
       ++ [viewAddOrInput model.adding]
       )
     ]
@@ -156,7 +150,7 @@ subscriptions model = Sub.none
 
 
 initReports =
-  [Report (Time.millisToPosix 0) (TimeOfDay 0 0)]
+  []
 
 
 init : () -> (Model, Cmd Msg)
