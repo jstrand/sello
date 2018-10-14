@@ -112,55 +112,79 @@ update msg model =
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
 
-viewEmptyDay : Date -> Html Msg
-viewEmptyDay day =
+editCell editingOtherDay day =
+  if editingOtherDay then
+    []
+  else
+    [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
+
+viewEmptyDay : Bool -> Date -> Html Msg
+viewEmptyDay editingOtherDay day =
   Html.tr []
     [ Html.td [] [Html.text <| Date.toIsoString day]
     , Html.td [] []
     , Html.td [] []
-    , Html.td [] [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
+    , Html.td [] []
+    , Html.td [] []
+    , Html.td [] (editCell editingOtherDay day)
     ]
 
-viewDay : Date -> Report -> Html Msg
-viewDay day report =
+viewDay : Bool -> Date -> Report -> Html Msg
+viewDay editingOtherDay day report =
   Html.tr []
     [ Html.td [] [Html.text <| Date.toIsoString day]
+    , Html.td [] []
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.start]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getEnd report]
-    , Html.td [] [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
+    , Html.td [] (editCell editingOtherDay day)
     ]
 
-viewOkButton = Html.button [Events.onClick SaveEdit] [Html.text "Ok"]
+viewOkButton start stop =
+  let disabledIfErr =
+        case Report.inputError start stop of
+          Just _ -> True
+          Nothing -> False
+      tooltip = Report.inputError start stop |> Maybe.withDefault "Save input"
+  in
+    Html.button [Events.onClick SaveEdit, Att.disabled disabledIfErr, Att.title tooltip] [Html.text "Ok"]
+
 viewCancelButton = Html.button [Events.onClick CancelEdit] [Html.text "Cancel"]
 
 editDay : ReportInput -> Html Msg
 editDay input =
   Html.tr []
     [ Html.td [] [Html.text <| Date.toIsoString input.date]
-    , Html.td [] [Html.input [Events.onInput InputStart] [Html.text <| input.start]]
-    , Html.td [] [Html.input [Events.onInput InputStop] [Html.text <| input.stop]]
-    , Html.td [] [viewOkButton, viewCancelButton]
+    , Html.td [] []
+    , Html.td [] [Html.input [Events.onInput InputStart, Att.value input.start] []]
+    , Html.td [] [Html.input [Events.onInput InputStop, Att.value input.stop] []]
+    , Html.td [] []
+    , Html.td [] [viewOkButton input.start input.stop, viewCancelButton]
     ]
 
 viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
   let report = getReport model.reports day
-      viewDayOrEmpty =
+      viewDayOrEmpty editing =
         report
-        |> Maybe.map (viewDay day)
-        |> Maybe.withDefault (viewEmptyDay day)
+        |> Maybe.map (viewDay editing day)
+        |> Maybe.withDefault (viewEmptyDay editing day)
   in
     case model.editing of
-      Nothing -> viewDayOrEmpty
-      Just input -> if day == input.date then editDay input else viewDayOrEmpty
+      Nothing -> viewDayOrEmpty False
+      Just input -> if day == input.date then editDay input else viewDayOrEmpty True
+
+header caption = Html.th [] [Html.text caption]
 
 reportHeaders =
-  [ Html.th [] [Html.text "Date"]
-  , Html.th [] [Html.text "Day"]
-  , Html.th [] [Html.text "Start"]
-  , Html.th [] [Html.text "Stop"]
-  , Html.th [] [Html.text "Diff"]
-  ]
+  List.map header
+    [ "Date"
+    , "Day"
+    , "Start"
+    , "Stop"
+    , "Diff"
+    , "Commands"
+    ]
 
 
 view : Model -> Browser.Document Msg
