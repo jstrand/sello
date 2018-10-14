@@ -142,10 +142,8 @@ viewDay editingOtherDay day report =
 
 viewOkButton start stop =
   let disabledIfErr =
-        case Report.inputError start stop of
-          Just _ -> True
-          Nothing -> False
-      tooltip = Report.inputError start stop |> Maybe.withDefault "Save input"
+        Report.inputErrors start stop |> List.isEmpty |> not
+      tooltip = Report.inputErrors start stop |> String.join ", "
   in
     Html.button [Events.onClick SaveEdit, Att.disabled disabledIfErr, Att.title tooltip] [Html.text "Ok"]
 

@@ -81,12 +81,10 @@ validMinutes = inRange 0 59
 parseTime : String -> Maybe Minutes
 parseTime time =
   let hoursAndMinutesList = String.split ":" time |> List.map String.toInt
---      hoursOnly = List.length hoursAndMinutesList == 1
---      hoursAndMinutes = List.length hoursAndMinutes == 2
   in
     case hoursAndMinutesList of
-    (Just h::[]) -> if validHours h then Just <| hours h else Nothing
-    (Just h::Just m::[]) -> if validHours h && validMinutes m then Just <| hours h + m else Nothing
+    [Just h] -> if validHours h then Just <| hours h else Nothing
+    [Just h, Just m] -> if validHours h && validMinutes m then Just <| hours h + m else Nothing
     _ -> Nothing
 
 isValidTimeInput : String -> Bool
@@ -104,15 +102,24 @@ parseReport start stop =
   in
     Report startInMinutes minutesUntilStop pauseInMinutes
 
--- In case of no error return Nothing, otherwise message
-inputError : String -> String -> Maybe String
-inputError start stop =
+
+inputErrors : String -> String -> List String
+inputErrors start stop =
   let maybeStart = parseTime start
       maybeStop = parseTime stop
+      startBeforeStopError =
+        case (maybeStart, maybeStop) of
+          (Just startMinutes, Just stopMinutes) ->
+            if startMinutes >= stopMinutes then
+              ["You have to start before you stop"]
+            else
+              []
+          _ -> []
+      nothingError caption value =
+        case value of
+          Just _ -> []
+          _ -> [caption]
   in
-    case (maybeStart, maybeStop) of
-      (Just startMinutes, Just stopMinutes) -> if startMinutes > stopMinutes then Just "You have to start before you stop" else Nothing
-      (Just _, Nothing) -> Just "Somethings up with the stop time"
-      (Nothing, Just _) -> Just "Somethings up with the start time"
-      _ -> Just "Get real"
-    
+    startBeforeStopError
+    ++ nothingError "What up with start" maybeStart
+    ++ nothingError "What up with stop" maybeStop 
