@@ -13,7 +13,7 @@ import Report exposing (..)
 
 defaultInput : Date -> ReportInput
 defaultInput date =
-  ReportInput date "08:00" "17:00" "1:00" "8:00"
+  ReportInput date "08:00" "17:00" "01:00" "08:00"
 
 dates : List Date
 dates =

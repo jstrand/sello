@@ -60,14 +60,15 @@ getWorkedMinutes report =
 
 getHoursAndMinutes : Minutes -> (Hours, Minutes)
 getHoursAndMinutes m =
-  (floor <| (toFloat m) / 60.0, modBy 60 m)
+  (floor <| (toFloat (abs m)) / 60.0, modBy 60 (abs m))
 
 showAsHoursAndMinutes : Minutes -> String
 showAsHoursAndMinutes time =
-  let (h, m) = getHoursAndMinutes time 
+  let sign = if time < 0 then "-" else ""
+      (h, m) = getHoursAndMinutes time 
       format = fromInt >> String.padLeft 2 '0'
   in
-    format h ++ ":" ++ format m
+    sign ++ format h ++ ":" ++ format m
 
 getStart : Report -> Minutes
 getStart report = report.start
@@ -102,6 +103,7 @@ parseTime time =
     case hoursAndMinutesList of
     [Just h] -> if validHours h then Just <| hours h else Nothing
     [Just h, Just m] -> if validHours h && validMinutes m then Just <| hours h + m else Nothing
+    [Nothing, Just m] -> if validMinutes m then Just m else Nothing
     _ -> Nothing
 
 isValidTimeInput : String -> Bool
@@ -128,6 +130,8 @@ inputErrors : ReportInput -> List String
 inputErrors input =
   let maybeStart = parseTime input.start
       maybeStop = parseTime input.stop
+      maybePause = parseTime input.pause
+      maybeExpected = parseTime input.expected
       startBeforeStopError =
         case (maybeStart, maybeStop) of
           (Just startMinutes, Just stopMinutes) ->
@@ -143,4 +147,6 @@ inputErrors input =
   in
     startBeforeStopError
     ++ nothingError "What up with start" maybeStart
-    ++ nothingError "What up with stop" maybeStop 
+    ++ nothingError "What up with stop" maybeStop
+    ++ nothingError "What up with pause" maybePause
+    ++ nothingError "What up with expected" maybeExpected
