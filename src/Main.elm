@@ -123,6 +123,7 @@ viewEmptyDay editingOtherDay day =
     , Html.td [] []
     , Html.td [] []
     , Html.td [] []
+    , Html.td [] []
     , Html.td [] (editCell editingOtherDay day)
     ]
 
@@ -137,6 +138,7 @@ viewDay editingOtherDay day report =
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.expected]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getWorkedMinutes report]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
+    , Html.td [] [Html.text <| "todo"]
     , Html.td [] (editCell editingOtherDay day)
     ]
 
@@ -164,7 +166,8 @@ editDay input =
     inputOk = inputErrors input |> List.isEmpty
     valueOrEmpty value = if inputOk then value else ""
     workedTime = parseReportInput input |> getWorkedMinutes |> Report.showAsHoursAndMinutes |> valueOrEmpty
-    diff = parseReportInput input |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty 
+    diff = parseReportInput input |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    total = "todo"
   in
     Html.tr []
       [ Html.td [] [Html.text <| Date.toIsoString input.date]
@@ -175,6 +178,7 @@ editDay input =
       , Html.td [] [viewTimeInputField InputExpected input.expected]
       , Html.td [] [workedTime |> Html.text]
       , Html.td [] [diff |> Html.text]
+      , Html.td [] [total |> Html.text]
       , Html.td [] [viewOkButton input, viewCancelButton]
       ]
 
@@ -202,6 +206,7 @@ reportHeaders =
     , "Expected"
     , "Worked"
     , "Diff"
+    , "Total"
     , "Commands"
     ]
 
