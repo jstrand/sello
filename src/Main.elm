@@ -11,7 +11,7 @@ import Report exposing (..)
 
 defaultInput : Date -> ReportInput
 defaultInput date =
-  ReportInput date "08:00" "17:00" "8:00"
+  ReportInput date "08:00" "17:00" "1:00" "8:00"
 
 dates : List Date
 dates =
@@ -48,6 +48,7 @@ type Msg
     | SaveEdit
     | InputStart String
     | InputStop String
+    | InputPause String
     | InputExpected String
 
 startReportInput model date =
@@ -87,6 +88,13 @@ saveModelExpected expected model =
       { model
       | editing = Just <| saveExpected input expected}
 
+saveModelPause pause model =
+  case model.editing of
+    Nothing -> model
+    Just input ->
+      { model
+      | editing = Just <| savePause input pause}
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
@@ -95,6 +103,7 @@ update msg model =
     SaveEdit -> (saveReportInput model, Cmd.none)
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
+    InputPause pause -> (saveModelPause pause model, Cmd.none)
     InputExpected expected -> (saveModelExpected expected model, Cmd.none)
 
 editCell editingOtherDay day =
@@ -112,6 +121,8 @@ viewEmptyDay editingOtherDay day =
     , Html.td [] []
     , Html.td [] []
     , Html.td [] []
+    , Html.td [] []
+    , Html.td [] []
     , Html.td [] (editCell editingOtherDay day)
     ]
 
@@ -122,8 +133,10 @@ viewDay editingOtherDay day report =
     , Html.td [] []
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.start]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getEnd report]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.pausedMinutes]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.expected]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getWorkedMinutes report]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
     , Html.td [] (editCell editingOtherDay day)
     ]
 
@@ -147,15 +160,21 @@ viewTimeInputField event value =
 
 editDay : ReportInput -> Html Msg
 editDay input =
-  let workedTime = if inputErrors input |> List.isEmpty then parseReportInput input |> getWorkedMinutes |> Report.showAsHoursAndMinutes else ""
+  let
+    inputOk = inputErrors input |> List.isEmpty
+    valueOrEmpty value = if inputOk then value else ""
+    workedTime = parseReportInput input |> getWorkedMinutes |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    diff = parseReportInput input |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty 
   in
     Html.tr []
       [ Html.td [] [Html.text <| Date.toIsoString input.date]
       , Html.td [] []
       , Html.td [] [viewTimeInputField InputStart input.start]
       , Html.td [] [viewTimeInputField InputStop input.stop]
+      , Html.td [] [viewTimeInputField InputPause input.pause]
       , Html.td [] [viewTimeInputField InputExpected input.expected]
       , Html.td [] [workedTime |> Html.text]
+      , Html.td [] [diff |> Html.text]
       , Html.td [] [viewOkButton input, viewCancelButton]
       ]
 
@@ -179,8 +198,10 @@ reportHeaders =
     , "Day"
     , "Start"
     , "Stop"
+    , "Pause"
     , "Expected"
     , "Worked"
+    , "Diff"
     , "Commands"
     ]
 

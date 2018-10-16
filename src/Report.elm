@@ -12,6 +12,7 @@ type alias ReportInput =
   { date: Date
   , start: String
   , stop: String
+  , pause: String
   , expected: String
   }
 
@@ -20,6 +21,9 @@ saveStart input start =
 
 saveStop input stop =
   { input | stop = stop }
+
+savePause input pause =
+  { input | pause = pause }
 
 saveExpected input expected =
   { input | expected = expected}
@@ -30,6 +34,7 @@ reportToInput date report =
     date
     (showAsHoursAndMinutes (getStart report))
     (showAsHoursAndMinutes (getEnd report))
+    (showAsHoursAndMinutes (getPause report))
     (showAsHoursAndMinutes (getExpected report))
 
 type alias Report =
@@ -76,6 +81,9 @@ getPause report = report.pausedMinutes
 getExpected : Report -> Minutes
 getExpected report = report.expected
 
+getDiff : Report -> Minutes
+getDiff report = getWorkedMinutes report - getExpected report
+
 inRange : Int -> Int -> Int -> Bool
 inRange min max value = value >= min && value <= max
 
@@ -108,7 +116,7 @@ parseReportInput report =
       stopInMinutes = parseTime report.stop |> Maybe.withDefault 0
       minutesUntilStop = stopInMinutes - startInMinutes
       expectedMinutes = parseTime report.expected |> Maybe.withDefault 0
-      pauseInMinutes = 0
+      pauseInMinutes = parseTime report.pause |> Maybe.withDefault 0
   in
     Report startInMinutes minutesUntilStop pauseInMinutes expectedMinutes
 
