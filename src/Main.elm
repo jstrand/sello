@@ -1,3 +1,5 @@
+module Main exposing (..)
+
 import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
@@ -27,6 +29,15 @@ type alias Model =
   { reports: ReportDict
   , editing: Maybe ReportInput
   }
+
+runningTotal : ReportDict -> Date -> Minutes
+runningTotal reports date =
+  let
+    before reportForDay _ = reportForDay <= (Date.toRataDie date) 
+    reportsUntil = Dict.filter before reports |> Dict.values
+    sum report acc = acc + (getDiff report)
+  in
+    List.foldl sum 0 reportsUntil
 
 saveReport : ReportInput -> ReportDict -> ReportDict
 saveReport reportInput reports =
@@ -112,8 +123,8 @@ editCell editingOtherDay day =
   else
     [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
 
-viewEmptyDay : Bool -> Date -> Html Msg
-viewEmptyDay editingOtherDay day =
+viewEmptyDay : Bool -> Date -> ReportDict -> Html Msg
+viewEmptyDay editingOtherDay day reports =
   Html.tr []
     [ Html.td [] [Html.text <| Date.toIsoString day]
     , Html.td [] []
@@ -127,8 +138,8 @@ viewEmptyDay editingOtherDay day =
     , Html.td [] (editCell editingOtherDay day)
     ]
 
-viewDay : Bool -> Date -> Report -> Html Msg
-viewDay editingOtherDay day report =
+viewDay : Bool -> Date -> ReportDict -> Report -> Html Msg
+viewDay editingOtherDay day reports report =
   Html.tr []
     [ Html.td [] [Html.text <| Date.toIsoString day]
     , Html.td [] []
@@ -138,7 +149,7 @@ viewDay editingOtherDay day report =
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.expected]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getWorkedMinutes report]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
-    , Html.td [] [Html.text <| "todo"]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| runningTotal reports day]
     , Html.td [] (editCell editingOtherDay day)
     ]
 
@@ -160,14 +171,16 @@ viewTimeInputField event value =
     ]
     []
 
-editDay : ReportInput -> Html Msg
-editDay input =
+editDay : Date -> ReportInput -> ReportDict -> Html Msg
+editDay date input reports =
   let
     inputOk = inputErrors input |> List.isEmpty
     valueOrEmpty value = if inputOk then value else ""
-    workedTime = parseReportInput input |> getWorkedMinutes |> Report.showAsHoursAndMinutes |> valueOrEmpty
-    diff = parseReportInput input |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty
-    total = "todo"
+    potentialReport = parseReportInput input
+    workedTime = potentialReport |> getWorkedMinutes |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    diff = potentialReport |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    potentialReports = saveReport input reports
+    totalValue = runningTotal potentialReports date |> Report.showAsHoursAndMinutes |> valueOrEmpty
   in
     Html.tr []
       [ Html.td [] [Html.text <| Date.toIsoString input.date]
@@ -178,7 +191,7 @@ editDay input =
       , Html.td [] [viewTimeInputField InputExpected input.expected]
       , Html.td [] [workedTime |> Html.text]
       , Html.td [] [diff |> Html.text]
-      , Html.td [] [total |> Html.text]
+      , Html.td [] [totalValue |> Html.text]
       , Html.td [] [viewOkButton input, viewCancelButton]
       ]
 
@@ -187,12 +200,12 @@ viewOrEditDay model day =
   let report = getReport model.reports day
       viewDayOrEmpty editing =
         report
-        |> Maybe.map (viewDay editing day)
-        |> Maybe.withDefault (viewEmptyDay editing day)
+        |> Maybe.map (viewDay editing day model.reports)
+        |> Maybe.withDefault (viewEmptyDay editing day model.reports)
   in
     case model.editing of
       Nothing -> viewDayOrEmpty False
-      Just input -> if day == input.date then editDay input else viewDayOrEmpty True
+      Just input -> if day == input.date then editDay day input model.reports else viewDayOrEmpty True
 
 header caption = Html.th [] [Html.text caption]
 
