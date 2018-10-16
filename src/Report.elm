@@ -8,10 +8,35 @@ import Time exposing (Month(..))
 type alias Minutes = Int
 type alias Hours = Int
 
+type alias ReportInput =
+  { date: Date
+  , start: String
+  , stop: String
+  , expected: String
+  }
+
+saveStart input start =
+  { input | start = start }
+
+saveStop input stop =
+  { input | stop = stop }
+
+saveExpected input expected =
+  { input | expected = expected}
+
+reportToInput : Date -> Report -> ReportInput
+reportToInput date report =
+  ReportInput
+    date
+    (showAsHoursAndMinutes (getStart report))
+    (showAsHoursAndMinutes (getEnd report))
+    (showAsHoursAndMinutes (getExpected report))
+
 type alias Report =
   { start: Minutes
   , minutesUntilStop: Minutes
   , pausedMinutes: Minutes
+  , expected: Minutes
   }
 
 type alias ReportValidation =
@@ -25,7 +50,7 @@ hours h = h * 60
 hoursAndMinutes : Int -> Int -> Int
 hoursAndMinutes h m = hours h + m
 
-workedMinutes report =
+getWorkedMinutes report =
   report.minutesUntilStop - report.pausedMinutes
 
 getHoursAndMinutes : Minutes -> (Hours, Minutes)
@@ -39,33 +64,17 @@ showAsHoursAndMinutes time =
   in
     format h ++ ":" ++ format m
 
-testShowAsHoursAndMinutes =
-  showAsHoursAndMinutes (hoursAndMinutes 8 10) == "08:10"
-  &&
-  showAsHoursAndMinutes (hoursAndMinutes 0 0) == "00:00"
-
-testReport1 = Report (hours 8) (hours 9) (hours 1)
-
-testWorkedMinutes =
-    workedMinutes testReport1 == hours 8
-
 getStart : Report -> Minutes
 getStart report = report.start
 
 getEnd : Report -> Minutes
 getEnd report = report.start + report.minutesUntilStop
 
-getDiff : Report -> Minutes
-getDiff report = report.minutesUntilStop - report.pausedMinutes
-
-testGetEnd =
-  (getEnd testReport1 |> showAsHoursAndMinutes) == "17:00"
-
 getPause : Report -> Int
 getPause report = report.pausedMinutes
 
-testGetPause =
-  (getPause testReport1 |> showAsHoursAndMinutes) == "01:00"
+getExpected : Report -> Minutes
+getExpected report = report.expected
 
 inRange : Int -> Int -> Int -> Bool
 inRange min max value = value >= min && value <= max
@@ -93,20 +102,24 @@ isValidTimeInput time =
   Just _ -> True
   _ -> False
 
-parseReport : String -> String -> Report
-parseReport start stop =
-  let startInMinutes = parseTime start |> Maybe.withDefault 0
-      stopInMinutes = parseTime stop |> Maybe.withDefault 0
+parseReportInput : ReportInput -> Report
+parseReportInput report =
+  let startInMinutes = parseTime report.start |> Maybe.withDefault 0
+      stopInMinutes = parseTime report.stop |> Maybe.withDefault 0
       minutesUntilStop = stopInMinutes - startInMinutes
+      expectedMinutes = parseTime report.expected |> Maybe.withDefault 0
       pauseInMinutes = 0
   in
-    Report startInMinutes minutesUntilStop pauseInMinutes
+    Report startInMinutes minutesUntilStop pauseInMinutes expectedMinutes
 
 
-inputErrors : String -> String -> List String
-inputErrors start stop =
-  let maybeStart = parseTime start
-      maybeStop = parseTime stop
+inputOk : ReportInput -> Bool
+inputOk = List.isEmpty << inputErrors
+
+inputErrors : ReportInput -> List String
+inputErrors input =
+  let maybeStart = parseTime input.start
+      maybeStop = parseTime input.stop
       startBeforeStopError =
         case (maybeStart, maybeStop) of
           (Just startMinutes, Just stopMinutes) ->

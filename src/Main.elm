@@ -9,33 +9,9 @@ import Date exposing (Date)
 
 import Report exposing (..)
 
-type alias ReportInput =
-  { date: Date
-  , start: String
-  , stop: String
-  }
-
-saveDate input date =
-  { input | date = date }
-
-saveStart input start =
-  { input | start = start }
-
-saveStop input stop =
-  { input | stop = stop }
-
-
-inputToReport : ReportInput -> Report
-inputToReport reportInput =
-  Report.parseReport reportInput.start reportInput.stop
-
-reportToInput : Date -> Report -> ReportInput
-reportToInput date report =
-  ReportInput date (showAsHoursAndMinutes report.start) (showAsHoursAndMinutes (Report.getEnd report))
-
 defaultInput : Date -> ReportInput
 defaultInput date =
-  ReportInput date "08:00" "17:00"
+  ReportInput date "08:00" "17:00" "8:00"
 
 dates : List Date
 dates =
@@ -54,7 +30,7 @@ type alias Model =
 
 saveReport : ReportInput -> ReportDict -> ReportDict
 saveReport reportInput reports =
-  Dict.insert (Date.toRataDie reportInput.date) (inputToReport reportInput) reports
+  Dict.insert (Date.toRataDie reportInput.date) (parseReportInput reportInput) reports
 
 getReport : ReportDict -> Date -> Maybe Report
 getReport reports date =
@@ -72,6 +48,7 @@ type Msg
     | SaveEdit
     | InputStart String
     | InputStop String
+    | InputExpected String
 
 startReportInput model date =
   { model | editing = Just (getReportInput model.reports date) }
@@ -103,6 +80,13 @@ saveModelStop stop model =
       { model
       | editing = Just <| saveStop input stop}
 
+saveModelExpected expected model =
+  case model.editing of
+    Nothing -> model
+    Just input ->
+      { model
+      | editing = Just <| saveExpected input expected}
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
@@ -111,6 +95,7 @@ update msg model =
     SaveEdit -> (saveReportInput model, Cmd.none)
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
+    InputExpected expected -> (saveModelExpected expected model, Cmd.none)
 
 editCell editingOtherDay day =
   if editingOtherDay then
@@ -126,6 +111,7 @@ viewEmptyDay editingOtherDay day =
     , Html.td [] []
     , Html.td [] []
     , Html.td [] []
+    , Html.td [] []
     , Html.td [] (editCell editingOtherDay day)
     ]
 
@@ -136,29 +122,42 @@ viewDay editingOtherDay day report =
     , Html.td [] []
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.start]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getEnd report]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.expected]
+    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getWorkedMinutes report]
     , Html.td [] (editCell editingOtherDay day)
     ]
 
-viewOkButton start stop =
+viewOkButton input =
   let disabledIfErr =
-        Report.inputErrors start stop |> List.isEmpty |> not
-      tooltip = Report.inputErrors start stop |> String.join ", "
+        Report.inputErrors input |> List.isEmpty |> not
+      tooltip = Report.inputErrors input |> String.join ", "
   in
     Html.button [Events.onClick SaveEdit, Att.disabled disabledIfErr, Att.title tooltip] [Html.text "Ok"]
 
 viewCancelButton = Html.button [Events.onClick CancelEdit] [Html.text "Cancel"]
 
+viewTimeInputField event value =
+  Html.input
+    [ Events.onInput event
+    , Att.value value
+    , Att.size 5
+    , Att.maxlength 5
+    ]
+    []
+
 editDay : ReportInput -> Html Msg
 editDay input =
-  Html.tr []
-    [ Html.td [] [Html.text <| Date.toIsoString input.date]
-    , Html.td [] []
-    , Html.td [] [Html.input [Events.onInput InputStart, Att.value input.start] []]
-    , Html.td [] [Html.input [Events.onInput InputStop, Att.value input.stop] []]
-    , Html.td [] []
-    , Html.td [] [viewOkButton input.start input.stop, viewCancelButton]
-    ]
+  let workedTime = if inputErrors input |> List.isEmpty then parseReportInput input |> getWorkedMinutes |> Report.showAsHoursAndMinutes else ""
+  in
+    Html.tr []
+      [ Html.td [] [Html.text <| Date.toIsoString input.date]
+      , Html.td [] []
+      , Html.td [] [viewTimeInputField InputStart input.start]
+      , Html.td [] [viewTimeInputField InputStop input.stop]
+      , Html.td [] [viewTimeInputField InputExpected input.expected]
+      , Html.td [] [workedTime |> Html.text]
+      , Html.td [] [viewOkButton input, viewCancelButton]
+      ]
 
 viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
@@ -180,7 +179,8 @@ reportHeaders =
     , "Day"
     , "Start"
     , "Stop"
-    , "Diff"
+    , "Expected"
+    , "Worked"
     , "Commands"
     ]
 
