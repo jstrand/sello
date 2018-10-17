@@ -1,8 +1,11 @@
 module Report exposing (..)
 
 import String exposing (fromInt)
-import Date exposing (Date)
+import Date exposing (Date, toRataDie)
 import Time exposing (Month(..))
+
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 -- Minutes since midnight 0 -> 00:00
 type alias Minutes = Int
@@ -150,3 +153,14 @@ inputErrors input =
     ++ nothingError "What up with stop" maybeStop
     ++ nothingError "What up with pause" maybePause
     ++ nothingError "What up with expected" maybeExpected
+
+
+encodeReport : Int -> Report -> Encode.Value
+encodeReport ratadie report = 
+  Encode.object
+    [ ("dateAsRataDie", ratadie |> Encode.int)
+    , ("start", report.start |> Encode.int)
+    , ("duration", report.minutesUntilStop |> Encode.int)
+    , ("paused", report.pausedMinutes |> Encode.int)
+    , ("expected", report.expected |> Encode.int)
+    ]

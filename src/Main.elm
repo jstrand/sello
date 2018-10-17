@@ -8,6 +8,7 @@ import Time
 import DateFormat
 import Dict exposing (Dict)
 import Date exposing (Date)
+import Json.Encode as Encode
 
 import Report exposing (..)
 
@@ -29,6 +30,12 @@ type alias Model =
   { reports: ReportDict
   , editing: Maybe ReportInput
   }
+
+encodeReports : ReportDict -> Encode.Value
+encodeReports reports =
+  Dict.map encodeReport reports
+  |> Dict.values
+  |> Encode.list identity
 
 runningTotal : ReportDict -> Date -> Minutes
 runningTotal reports date =
