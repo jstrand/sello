@@ -161,6 +161,6 @@ encodeReport ratadie report =
     [ ("dateAsRataDie", ratadie |> Encode.int)
     , ("start", report.start |> Encode.int)
     , ("duration", report.minutesUntilStop |> Encode.int)
-    , ("paused", report.pausedMinutes |> Encode.int)
+    , ("pause", report.pausedMinutes |> Encode.int)
     , ("expected", report.expected |> Encode.int)
     ]

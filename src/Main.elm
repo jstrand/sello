@@ -9,6 +9,8 @@ import DateFormat
 import Dict exposing (Dict)
 import Date exposing (Date)
 import Json.Encode as Encode
+import Json.Decode as Decode
+import Http
 
 import Report exposing (..)
 
@@ -36,6 +38,11 @@ encodeReports reports =
   Dict.map encodeReport reports
   |> Dict.values
   |> Encode.list identity
+
+saveReports : ReportDict -> Cmd Msg
+saveReports reports =
+  Http.post "http://localhost:8001/sello/reports" (Http.jsonBody (encodeReports reports)) Decode.value
+  |> Http.send SaveResult
 
 runningTotal : ReportDict -> Date -> Minutes
 runningTotal reports date =
@@ -68,6 +75,7 @@ type Msg
     | InputStop String
     | InputPause String
     | InputExpected String
+    | SaveResult (Result Http.Error Decode.Value)
 
 startReportInput model date =
   { model | editing = Just (getReportInput model.reports date) }
@@ -118,11 +126,14 @@ update msg model =
   case msg of
     StartEdit date -> (startReportInput model date, Cmd.none)
     CancelEdit -> (cancelReportInput model, Cmd.none)
-    SaveEdit -> (saveReportInput model, Cmd.none)
+    SaveEdit -> 
+      let newModel = saveReportInput model
+      in (newModel, saveReports newModel.reports)
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
     InputPause pause -> (saveModelPause pause model, Cmd.none)
     InputExpected expected -> (saveModelExpected expected model, Cmd.none)
+    SaveResult _ -> (model, Cmd.none)
 
 editCell editingOtherDay day =
   if editingOtherDay then
