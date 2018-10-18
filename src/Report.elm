@@ -164,3 +164,11 @@ encodeReport ratadie report =
     , ("pause", report.pausedMinutes |> Encode.int)
     , ("expected", report.expected |> Encode.int)
     ]
+
+decodeReport : Decode.Decoder Report
+decodeReport =
+  Decode.map4 Report
+      (Decode.field "start" Decode.int)
+      (Decode.field "duration" Decode.int)
+      (Decode.field "pause" Decode.int)
+      (Decode.field "expected" Decode.int)

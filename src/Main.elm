@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Tuple exposing (pair)
 import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
@@ -28,9 +29,12 @@ dates =
 
 type alias ReportDict = Dict Int Report
 
+type AppStatus = Loading | Ready | Failure String
+
 type alias Model =
   { reports: ReportDict
   , editing: Maybe ReportInput
+  , status: AppStatus
   }
 
 encodeReports : ReportDict -> Encode.Value
@@ -39,10 +43,32 @@ encodeReports reports =
   |> Dict.values
   |> Encode.list identity
 
+decodeReportWithDate : Decode.Decoder (Int, Report)
+decodeReportWithDate =
+  Decode.map2
+    pair
+    (Decode.field "dateAsRataDie" Decode.int)
+    decodeReport
+
+decodeReportsPerDay : Decode.Decoder (List (Int, Report))
+decodeReportsPerDay = 
+  Decode.list decodeReportWithDate
+
+decodeReports : Decode.Decoder ReportDict
+decodeReports =
+  Decode.map Dict.fromList decodeReportsPerDay
+
+url = "http://localhost:8001/sello/reports"
+
 saveReports : ReportDict -> Cmd Msg
 saveReports reports =
-  Http.post "http://localhost:8001/sello/reports" (Http.jsonBody (encodeReports reports)) Decode.value
+  Http.post url (Http.jsonBody (encodeReports reports)) Decode.value
   |> Http.send SaveResult
+
+loadReports : Cmd Msg
+loadReports =
+  Http.get url decodeReports
+  |> Http.send LoadResult
 
 runningTotal : ReportDict -> Date -> Minutes
 runningTotal reports date =
@@ -76,6 +102,7 @@ type Msg
     | InputPause String
     | InputExpected String
     | SaveResult (Result Http.Error Decode.Value)
+    | LoadResult (Result Http.Error ReportDict)
 
 startReportInput model date =
   { model | editing = Just (getReportInput model.reports date) }
@@ -134,6 +161,8 @@ update msg model =
     InputPause pause -> (saveModelPause pause model, Cmd.none)
     InputExpected expected -> (saveModelExpected expected model, Cmd.none)
     SaveResult _ -> (model, Cmd.none)
+    LoadResult (Ok reports) -> ({ model | reports = reports, status = Ready }, Cmd.none)
+    LoadResult (Err error) -> ({ model | status = Failure (Debug.toString error)}, Cmd.none)
 
 editCell editingOtherDay day =
   if editingOtherDay then
@@ -241,7 +270,6 @@ reportHeaders =
     , "Commands"
     ]
 
-
 view : Model -> Browser.Document Msg
 view model =
   Browser.Document
@@ -262,7 +290,7 @@ initReports =
 
 
 init : () -> (Model, Cmd Msg)
-init _ = (Model initReports Nothing, Cmd.none)
+init _ = (Model initReports Nothing Loading, loadReports)
 
 
 main =
