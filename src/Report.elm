@@ -3,6 +3,8 @@ module Report exposing (..)
 import String exposing (fromInt)
 import Date exposing (Date, toRataDie)
 import Time exposing (Month(..))
+import Dict exposing (Dict)
+import Tuple exposing (pair)
 
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -19,16 +21,16 @@ type alias ReportInput =
   , expected: String
   }
 
-saveStart input start =
+saveStart start input =
   { input | start = start }
 
-saveStop input stop =
+saveStop stop input =
   { input | stop = stop }
 
-savePause input pause =
+savePause pause input =
   { input | pause = pause }
 
-saveExpected input expected =
+saveExpected expected input =
   { input | expected = expected}
 
 reportToInput : Date -> Report -> ReportInput
@@ -172,3 +174,53 @@ decodeReport =
       (Decode.field "duration" Decode.int)
       (Decode.field "pause" Decode.int)
       (Decode.field "expected" Decode.int)
+
+type alias ReportDict = Dict Int Report
+
+encodeReports : ReportDict -> Encode.Value
+encodeReports reports =
+  Dict.map encodeReport reports
+  |> Dict.values
+  |> Encode.list identity
+
+decodeReportWithDate : Decode.Decoder (Int, Report)
+decodeReportWithDate =
+  Decode.map2
+    pair
+    (Decode.field "dateAsRataDie" Decode.int)
+    decodeReport
+
+decodeReportsPerDay : Decode.Decoder (List (Int, Report))
+decodeReportsPerDay = 
+  Decode.list decodeReportWithDate
+
+decodeReports : Decode.Decoder ReportDict
+decodeReports =
+  Decode.map Dict.fromList decodeReportsPerDay
+
+runningTotal : ReportDict -> Date -> Minutes
+runningTotal reports date =
+  let
+    before reportForDay _ = reportForDay <= (Date.toRataDie date) 
+    reportsUntil = Dict.filter before reports |> Dict.values
+    sum report acc = acc + (getDiff report)
+  in
+    List.foldl sum 0 reportsUntil
+
+saveReport : ReportInput -> ReportDict -> ReportDict
+saveReport reportInput reports =
+  Dict.insert (Date.toRataDie reportInput.date) (parseReportInput reportInput) reports
+
+getReport : ReportDict -> Date -> Maybe Report
+getReport reports date =
+  Dict.get (Date.toRataDie date) reports
+
+defaultInput : Date -> ReportInput
+defaultInput date =
+  ReportInput date "08:00" "17:00" "01:00" "08:00"
+
+getReportInput : ReportDict -> Date -> ReportInput
+getReportInput reports date =
+  getReport reports date
+  |> Maybe.map (reportToInput date)
+  |> Maybe.withDefault (defaultInput date)

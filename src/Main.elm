@@ -15,10 +15,6 @@ import Http
 
 import Report exposing (..)
 
-defaultInput : Date -> ReportInput
-defaultInput date =
-  ReportInput date "08:00" "17:00" "01:00" "08:00"
-
 dates : List Date
 dates =
   let dayInInterval = Date.fromCalendarDate 2018 Time.Oct 12
@@ -27,8 +23,6 @@ dates =
   in
     Date.range Date.Day 1 start stop
 
-type alias ReportDict = Dict Int Report
-
 type AppStatus = Loading | Saving | Ready | Failure String
 
 type alias Model =
@@ -36,27 +30,6 @@ type alias Model =
   , editing: Maybe ReportInput
   , status: AppStatus
   }
-
-encodeReports : ReportDict -> Encode.Value
-encodeReports reports =
-  Dict.map encodeReport reports
-  |> Dict.values
-  |> Encode.list identity
-
-decodeReportWithDate : Decode.Decoder (Int, Report)
-decodeReportWithDate =
-  Decode.map2
-    pair
-    (Decode.field "dateAsRataDie" Decode.int)
-    decodeReport
-
-decodeReportsPerDay : Decode.Decoder (List (Int, Report))
-decodeReportsPerDay = 
-  Decode.list decodeReportWithDate
-
-decodeReports : Decode.Decoder ReportDict
-decodeReports =
-  Decode.map Dict.fromList decodeReportsPerDay
 
 url = "http://localhost:8001/sello/reports"
 
@@ -69,29 +42,6 @@ loadReports : Cmd Msg
 loadReports =
   Http.get url decodeReports
   |> Http.send LoadResult
-
-runningTotal : ReportDict -> Date -> Minutes
-runningTotal reports date =
-  let
-    before reportForDay _ = reportForDay <= (Date.toRataDie date) 
-    reportsUntil = Dict.filter before reports |> Dict.values
-    sum report acc = acc + (getDiff report)
-  in
-    List.foldl sum 0 reportsUntil
-
-saveReport : ReportInput -> ReportDict -> ReportDict
-saveReport reportInput reports =
-  Dict.insert (Date.toRataDie reportInput.date) (parseReportInput reportInput) reports
-
-getReport : ReportDict -> Date -> Maybe Report
-getReport reports date =
-  Dict.get (Date.toRataDie date) reports
-
-getReportInput : ReportDict -> Date -> ReportInput
-getReportInput reports date =
-  getReport reports date
-  |> Maybe.map (reportToInput date)
-  |> Maybe.withDefault (defaultInput date)
 
 type Msg
     = StartEdit Date
@@ -120,33 +70,12 @@ saveReportInput model =
       , reports = saveReport input model.reports
       }
 
-saveModelStart start model =
+saveField updateF model =
   case model.editing of
     Nothing -> model
     Just input ->
       { model
-      | editing = Just <| saveStart input start}
-
-saveModelStop stop model =
-  case model.editing of
-    Nothing -> model
-    Just input ->
-      { model
-      | editing = Just <| saveStop input stop}
-
-saveModelExpected expected model =
-  case model.editing of
-    Nothing -> model
-    Just input ->
-      { model
-      | editing = Just <| saveExpected input expected}
-
-saveModelPause pause model =
-  case model.editing of
-    Nothing -> model
-    Just input ->
-      { model
-      | editing = Just <| savePause input pause}
+      | editing = Just <| updateF input}
 
 failWith error model =
   ({ model | status = Failure (Debug.toString error)}, Cmd.none)
@@ -159,10 +88,10 @@ update msg model =
     SaveEdit -> 
       let newModel = saveReportInput model
       in ({ newModel | status = Saving }, saveReports newModel.reports)
-    InputStart start -> (saveModelStart start model, Cmd.none)
-    InputStop stop -> (saveModelStop stop model, Cmd.none)
-    InputPause pause -> (saveModelPause pause model, Cmd.none)
-    InputExpected expected -> (saveModelExpected expected model, Cmd.none)
+    InputStart start -> (saveField (saveStart start) model, Cmd.none)
+    InputStop stop -> (saveField (saveStop stop) model, Cmd.none)
+    InputPause pause -> (saveField (savePause pause) model, Cmd.none)
+    InputExpected expected -> (saveField (saveExpected expected) model, Cmd.none)
     SaveResult (Ok _) -> ({ model | status = Ready }, Cmd.none)
     SaveResult (Err error) -> failWith error model
     LoadResult (Ok reports) -> ({ model | reports = reports, status = Ready }, Cmd.none)
@@ -170,38 +99,50 @@ update msg model =
 
 editCell readOnly day =
   if readOnly then
-    []
+    emptyCell
   else
-    [Html.button [Events.onClick (StartEdit day), Att.class "btn btn-primary"] [Html.text "Edit"]]
+    Html.td
+      []
+      [Html.button [Events.onClick (StartEdit day), Att.class "btn btn-primary"] [Html.text "Edit"]]
+
+cell = Html.td []
+
+emptyCell = cell []
+
+cellWithOne one = cell [one]
+
+textCell value = Html.td [] [Html.text <| value]
+
+timeCell = textCell << Report.showAsHoursAndMinutes
 
 viewEmptyDay : Bool -> Date -> ReportDict -> Html Msg
 viewEmptyDay editingOtherDay day reports =
   Html.tr []
-    [ Html.td [] [Html.text <| Date.toIsoString day]
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] []
-    , Html.td [] (editCell editingOtherDay day)
+    [ textCell <| Date.toIsoString day
+    , emptyCell
+    , emptyCell
+    , emptyCell
+    , emptyCell
+    , emptyCell
+    , emptyCell
+    , emptyCell
+    , emptyCell
+    , editCell editingOtherDay day
     ]
 
 viewDay : Bool -> Date -> ReportDict -> Report -> Html Msg
 viewDay readOnly day reports report =
   Html.tr []
-    [ Html.td [] [Html.text <| Date.toIsoString day]
-    , Html.td [] []
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.start]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getEnd report]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.pausedMinutes]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| report.expected]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getWorkedMinutes report]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
-    , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| runningTotal reports day]
-    , Html.td [] (editCell readOnly day)
+    [ textCell <| Date.toIsoString day
+    , emptyCell
+    , timeCell report.start
+    , timeCell <| Report.getEnd report
+    , timeCell report.pausedMinutes
+    , timeCell report.expected
+    , timeCell <| Report.getWorkedMinutes report
+    , timeCell <| Report.getDiff report
+    , timeCell <| runningTotal reports day
+    , editCell readOnly day
     ]
 
 viewOkButton input =
@@ -235,16 +176,16 @@ editDay date input reports =
     totalValue = runningTotal potentialReports date |> Report.showAsHoursAndMinutes |> valueOrEmpty
   in
     Html.tr []
-      [ Html.td [] [Html.text <| Date.toIsoString input.date]
-      , Html.td [] []
-      , Html.td [] [viewTimeInputField InputStart input.start]
-      , Html.td [] [viewTimeInputField InputStop input.stop]
-      , Html.td [] [viewTimeInputField InputPause input.pause]
-      , Html.td [] [viewTimeInputField InputExpected input.expected]
-      , Html.td [] [workedTime |> Html.text]
-      , Html.td [] [diff |> Html.text]
-      , Html.td [] [totalValue |> Html.text]
-      , Html.td [] [viewOkButton input, viewCancelButton]
+      [ textCell <| Date.toIsoString input.date
+      , emptyCell
+      , cell [viewTimeInputField InputStart input.start]
+      , cell [viewTimeInputField InputStop input.stop]
+      , cell [viewTimeInputField InputPause input.pause]
+      , cell [viewTimeInputField InputExpected input.expected]
+      , textCell workedTime
+      , textCell diff
+      , textCell totalValue
+      , cell [viewOkButton input, viewCancelButton]
       ]
 
 viewOrEditDay : Model -> Date -> Html Msg
