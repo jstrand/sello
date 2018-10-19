@@ -29,7 +29,7 @@ dates =
 
 type alias ReportDict = Dict Int Report
 
-type AppStatus = Loading | Ready | Failure String
+type AppStatus = Loading | Saving | Ready | Failure String
 
 type alias Model =
   { reports: ReportDict
@@ -148,6 +148,9 @@ saveModelPause pause model =
       { model
       | editing = Just <| savePause input pause}
 
+failWith error model =
+  ({ model | status = Failure (Debug.toString error)}, Cmd.none)
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
@@ -155,20 +158,21 @@ update msg model =
     CancelEdit -> (cancelReportInput model, Cmd.none)
     SaveEdit -> 
       let newModel = saveReportInput model
-      in (newModel, saveReports newModel.reports)
+      in ({ newModel | status = Saving }, saveReports newModel.reports)
     InputStart start -> (saveModelStart start model, Cmd.none)
     InputStop stop -> (saveModelStop stop model, Cmd.none)
     InputPause pause -> (saveModelPause pause model, Cmd.none)
     InputExpected expected -> (saveModelExpected expected model, Cmd.none)
-    SaveResult _ -> (model, Cmd.none)
+    SaveResult (Ok _) -> ({ model | status = Ready }, Cmd.none)
+    SaveResult (Err error) -> failWith error model
     LoadResult (Ok reports) -> ({ model | reports = reports, status = Ready }, Cmd.none)
-    LoadResult (Err error) -> ({ model | status = Failure (Debug.toString error)}, Cmd.none)
+    LoadResult (Err error) -> failWith error model
 
-editCell editingOtherDay day =
-  if editingOtherDay then
+editCell readOnly day =
+  if readOnly then
     []
   else
-    [Html.button [Events.onClick (StartEdit day)] [Html.text "Edit"]]
+    [Html.button [Events.onClick (StartEdit day), Att.class "btn btn-primary"] [Html.text "Edit"]]
 
 viewEmptyDay : Bool -> Date -> ReportDict -> Html Msg
 viewEmptyDay editingOtherDay day reports =
@@ -186,7 +190,7 @@ viewEmptyDay editingOtherDay day reports =
     ]
 
 viewDay : Bool -> Date -> ReportDict -> Report -> Html Msg
-viewDay editingOtherDay day reports report =
+viewDay readOnly day reports report =
   Html.tr []
     [ Html.td [] [Html.text <| Date.toIsoString day]
     , Html.td [] []
@@ -197,7 +201,7 @@ viewDay editingOtherDay day reports report =
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getWorkedMinutes report]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| Report.getDiff report]
     , Html.td [] [Html.text <| Report.showAsHoursAndMinutes <| runningTotal reports day]
-    , Html.td [] (editCell editingOtherDay day)
+    , Html.td [] (editCell readOnly day)
     ]
 
 viewOkButton input =
@@ -205,16 +209,17 @@ viewOkButton input =
         Report.inputErrors input |> List.isEmpty |> not
       tooltip = Report.inputErrors input |> String.join ", "
   in
-    Html.button [Events.onClick SaveEdit, Att.disabled disabledIfErr, Att.title tooltip] [Html.text "Ok"]
+    Html.button [Events.onClick SaveEdit, Att.disabled disabledIfErr, Att.title tooltip, Att.class "btn btn-primary"] [Html.text "OK"]
 
-viewCancelButton = Html.button [Events.onClick CancelEdit] [Html.text "Cancel"]
+viewCancelButton = Html.button [Events.onClick CancelEdit, Att.class "btn btn-secondary"] [Html.text "Cancel"]
 
 viewTimeInputField event value =
   Html.input
     [ Events.onInput event
     , Att.value value
-    , Att.size 5
+    , Att.size 1
     , Att.maxlength 5
+    , Att.class "form-control"
     ]
     []
 
@@ -245,13 +250,13 @@ editDay date input reports =
 viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
   let report = getReport model.reports day
-      viewDayOrEmpty editing =
+      viewDayOrEmpty readOnly =
         report
-        |> Maybe.map (viewDay editing day model.reports)
-        |> Maybe.withDefault (viewEmptyDay editing day model.reports)
+        |> Maybe.map (viewDay readOnly day model.reports)
+        |> Maybe.withDefault (viewEmptyDay readOnly day model.reports)
   in
     case model.editing of
-      Nothing -> viewDayOrEmpty False
+      Nothing -> viewDayOrEmpty (model.status == Saving)
       Just input -> if day == input.date then editDay day input model.reports else viewDayOrEmpty True
 
 header caption = Html.th [] [Html.text caption]
@@ -270,16 +275,30 @@ reportHeaders =
     , "Commands"
     ]
 
+viewReports model =
+  [ Html.table [Att.class "table"]
+    (reportHeaders
+    ++ (List.map (viewOrEditDay model) dates)
+    )
+  ]
+
+viewBusy = 
+  [ Html.text "Please wait..." ]
+
+viewError error =
+  [ Html.text error ]
+
 view : Model -> Browser.Document Msg
 view model =
-  Browser.Document
-    "Sello"
-    [ Html.table []
-      (reportHeaders
-      ++ (List.map (viewOrEditDay model) dates)
-      )
-    ]
-
+  let currentContents =
+        case model.status of
+          Loading -> viewBusy
+          Saving -> viewReports model
+          Ready -> viewReports model
+          Failure error -> viewError error
+  in
+    Browser.Document "Sello" currentContents
+    
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.none
