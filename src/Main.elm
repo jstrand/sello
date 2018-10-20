@@ -12,23 +12,21 @@ import Date exposing (Date)
 import Json.Encode as Encode
 import Json.Decode as Decode
 import Http
+import Task
 
 import Report exposing (..)
 
-dates : List Date
-dates =
-  let dayInInterval = Date.fromCalendarDate 2018 Time.Oct 12
-      start = Date.floor Date.Year dayInInterval
-      stop = Date.ceiling Date.Year dayInInterval
-  in
-    Date.range Date.Day 1 start stop
 
 type AppStatus = Loading | Saving | Ready | Failure String
+
 
 type alias Model =
   { reports: ReportDict
   , editing: Maybe ReportInput
   , status: AppStatus
+  , showDate: Date
+  , showInterval: Date.Unit
+  , today: Date
   }
 
 url = "http://localhost:8001/sello/reports"
@@ -43,6 +41,7 @@ loadReports =
   Http.get url decodeReports
   |> Http.send LoadResult
 
+
 type Msg
     = StartEdit Date
     | CancelEdit
@@ -53,6 +52,11 @@ type Msg
     | InputExpected String
     | SaveResult (Result Http.Error Decode.Value)
     | LoadResult (Result Http.Error ReportDict)
+    | SetInterval Date.Unit
+    | PreviousInterval
+    | NextInterval
+    | SetToday Date
+    | GotoToday
 
 startReportInput model date =
   { model | editing = Just (getReportInput model.reports date) }
@@ -80,6 +84,15 @@ saveField updateF model =
 failWith error model =
   ({ model | status = Failure (Debug.toString error)}, Cmd.none)
 
+moveInterval : Int -> Model -> Model
+moveInterval offset model =
+  let newDate = Date.add model.showInterval offset model.showDate
+  in
+    { model | showDate = newDate }
+
+previousInterval = moveInterval -1
+nextInterval = moveInterval 1
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
@@ -96,6 +109,12 @@ update msg model =
     SaveResult (Err error) -> failWith error model
     LoadResult (Ok reports) -> ({ model | reports = reports, status = Ready }, Cmd.none)
     LoadResult (Err error) -> failWith error model
+    SetInterval interval -> ({ model | showInterval = interval }, Cmd.none)
+    PreviousInterval -> (previousInterval model, Cmd.none)
+    NextInterval -> (nextInterval model, Cmd.none)
+    SetToday date -> ({ model | showDate = date, today = date }, Cmd.none)
+    GotoToday -> (model, getTodaysDate)
+
 
 editCell readOnly day =
   if readOnly then
@@ -103,7 +122,11 @@ editCell readOnly day =
   else
     Html.td
       []
-      [Html.button [Events.onClick (StartEdit day), Att.class "btn btn-primary"] [Html.text "Edit"]]
+      [ Html.button
+        [ Events.onClick (StartEdit day)
+        , Att.class "btn btn-primary"
+        ]
+        [Html.text "Edit"]]
 
 cell = Html.td []
 
@@ -119,7 +142,7 @@ viewEmptyDay : Bool -> Date -> ReportDict -> Html Msg
 viewEmptyDay editingOtherDay day reports =
   Html.tr []
     [ textCell <| Date.toIsoString day
-    , emptyCell
+    , textCell <| Date.format "EE" day
     , emptyCell
     , emptyCell
     , emptyCell
@@ -134,7 +157,7 @@ viewDay : Bool -> Date -> ReportDict -> Report -> Html Msg
 viewDay readOnly day reports report =
   Html.tr []
     [ textCell <| Date.toIsoString day
-    , emptyCell
+    , textCell <| Date.format "EE" day
     , timeCell report.start
     , timeCell <| Report.getEnd report
     , timeCell report.pausedMinutes
@@ -164,8 +187,8 @@ viewTimeInputField event value =
     ]
     []
 
-editDay : Date -> ReportInput -> ReportDict -> Html Msg
-editDay date input reports =
+editDay : ReportInput -> ReportDict -> Html Msg
+editDay input reports =
   let
     inputOk = inputErrors input |> List.isEmpty
     valueOrEmpty value = if inputOk then value else ""
@@ -173,11 +196,11 @@ editDay date input reports =
     workedTime = potentialReport |> getWorkedMinutes |> Report.showAsHoursAndMinutes |> valueOrEmpty
     diff = potentialReport |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty
     potentialReports = saveReport input reports
-    totalValue = runningTotal potentialReports date |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    totalValue = runningTotal potentialReports input.date |> Report.showAsHoursAndMinutes |> valueOrEmpty
   in
     Html.tr []
       [ textCell <| Date.toIsoString input.date
-      , emptyCell
+      , textCell <| Date.format "EE" input.date
       , cell [viewTimeInputField InputStart input.start]
       , cell [viewTimeInputField InputStop input.stop]
       , cell [viewTimeInputField InputPause input.pause]
@@ -198,14 +221,24 @@ viewOrEditDay model day =
   in
     case model.editing of
       Nothing -> viewDayOrEmpty (model.status == Saving)
-      Just input -> if day == input.date then editDay day input model.reports else viewDayOrEmpty True
+      Just input -> if day == input.date then editDay input model.reports else viewDayOrEmpty True
 
-header caption = Html.th [] [Html.text caption]
+timeColumnHeader caption =
+  Html.th
+    [ Att.style "width" "10%"
+    ]
+    [ Html.text caption ]
+
+headerWithWidth caption width =
+  Html.th
+    [Att.style "width" width]
+    [Html.text caption]
 
 reportHeaders =
-  List.map header
-    [ "Date"
-    , "Day"
+  [ headerWithWidth "Date" "10em"
+  ] ++
+  List.map timeColumnHeader
+    [ "Day"
     , "Start"
     , "Stop"
     , "Pause"
@@ -213,13 +246,105 @@ reportHeaders =
     , "Worked"
     , "Diff"
     , "Total"
-    , "Commands"
+    ] ++ [Html.th [] []]
+
+fixedWidthLabel width caption =
+  Html.span
+    [ Att.style "width" width
+    , Att.style "display" "inline-block"
+    , Att.style "text-align" "center"
+    ]
+    [Html.text caption]
+
+viewInterval model =
+  let
+    format = case model.showInterval of
+      Date.Years -> "y"
+      Date.Months -> "MMMM, y"
+      Date.Weeks -> "'Week' w, y"
+      Date.Days -> "EEEE, d MMMM y"
+  in
+    Date.format format model.showDate
+    |> \caption ->
+      Html.button
+        [ Att.class "btn btn-dark"
+        , Att.title "Show interval with todays date"
+        , Att.style "width" "10em"
+        , Events.onClick GotoToday
+        ]
+        [ Html.text caption ]
+
+intervalButtons =
+  Html.div
+    [ Att.class "btn-group"
+    ]
+    [ intervalButton Date.Years "Year"
+    , intervalButton Date.Months "Month"
+    , intervalButton Date.Weeks "Week"
     ]
 
+intervalButton : Date.Unit -> String -> Html Msg
+intervalButton interval caption =
+  Html.button
+    [ Events.onClick <| SetInterval interval
+    , Att.class "btn btn-dark"
+    ]
+    [ Html.text caption ]
+
+previousButton =
+  Html.button
+    [ Events.onClick PreviousInterval, Att.class "btn btn-dark"]
+    [Html.text "<<"]
+
+nextButton =
+  Html.button
+    [ Events.onClick NextInterval, Att.class "btn btn-dark"]
+    [Html.text ">>"]
+ 
+moveButtons model =
+  Html.div
+    [ Att.class "btn-group"
+    ]
+    [ previousButton
+    , viewInterval model
+    , nextButton
+    ]
+
+separator = Html.text " "
+
+viewNavigation model =
+  Html.div [ Att.class "toolbar" ]
+    [ moveButtons model
+    , separator
+    , intervalButtons
+    ]
+
+dateUnitToInterval : Date.Unit -> Date.Interval
+dateUnitToInterval unit =
+  case unit of
+    Date.Years -> Date.Year
+    Date.Months -> Date.Month
+    Date.Weeks -> Date.Week
+    Date.Days -> Date.Day
+
+datesInInterval : Model -> List Date
+datesInInterval model =
+  let dayInInterval = model.showDate
+      interval = dateUnitToInterval model.showInterval
+      start = Date.floor interval dayInInterval
+      stop = Date.ceiling interval dayInInterval
+  in
+    Date.range Date.Day 1 start stop
+
+viewReports : Model -> List (Html Msg)
 viewReports model =
-  [ Html.table [Att.class "table"]
-    (reportHeaders
-    ++ (List.map (viewOrEditDay model) dates)
+  [ viewNavigation model
+  , Html.table
+    [ Att.class "table"
+    , Att.style "max-width" "1200px"
+    ]
+    ( reportHeaders
+    ++ (List.map (viewOrEditDay model) (datesInInterval model))
     )
   ]
 
@@ -244,13 +369,21 @@ view model =
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.none
 
+getTodaysDate = Date.today |> Task.perform SetToday
 
-initReports =
-  Dict.empty
-
+fakeDate = Date.fromCalendarDate 2000 Time.Jan 1
 
 init : () -> (Model, Cmd Msg)
-init _ = (Model initReports Nothing Loading, loadReports)
+init _ =
+  ( Model
+    Dict.empty
+    Nothing
+    Loading
+    fakeDate
+    Date.Weeks
+    fakeDate
+  , Cmd.batch [loadReports, getTodaysDate]
+  )
 
 
 main =
