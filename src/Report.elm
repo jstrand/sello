@@ -217,7 +217,7 @@ getReport reports date =
 
 defaultInput : Date -> ReportInput
 defaultInput date =
-  ReportInput date "08:00" "17:00" "01:00" "08:00"
+  ReportInput date "" "" "" "08:00"
 
 getReportInput : ReportDict -> Date -> ReportInput
 getReportInput reports date =

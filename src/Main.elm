@@ -13,6 +13,7 @@ import Json.Encode as Encode
 import Json.Decode as Decode
 import Http
 import Task
+import Browser.Dom as Dom
 
 import Report exposing (..)
 
@@ -96,7 +97,7 @@ nextInterval = moveInterval 1
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    StartEdit date -> (startReportInput model date, Cmd.none)
+    StartEdit date -> (startReportInput model date, Task.attempt (\_ -> GotoToday) (Dom.focus "start"))
     CancelEdit -> (cancelReportInput model, Cmd.none)
     SaveEdit -> 
       let newModel = saveReportInput model
@@ -117,16 +118,15 @@ update msg model =
 
 
 editCell readOnly day =
-  if readOnly then
-    emptyCell
-  else
     Html.td
       []
       [ Html.button
         [ Events.onClick (StartEdit day)
-        , Att.class "btn btn-primary"
+        , Att.class "icon-button"
+        , Att.disabled readOnly
         ]
-        [Html.text "Edit"]]
+        [ icon "fas fa-edit fa-lg" ]
+      ]
 
 cell = Html.td []
 
@@ -168,18 +168,33 @@ viewDay readOnly day reports report =
     , editCell readOnly day
     ]
 
+icon class =
+  Html.i [Att.class class] []
+
 viewOkButton input =
   let disabledIfErr =
         Report.inputErrors input |> List.isEmpty |> not
       tooltip = Report.inputErrors input |> String.join ", "
   in
-    Html.button [Events.onClick SaveEdit, Att.disabled disabledIfErr, Att.title tooltip, Att.class "btn btn-primary"] [Html.text "OK"]
+    Html.button
+      [ Events.onClick SaveEdit
+      , Att.disabled disabledIfErr
+      , Att.title tooltip
+      , Att.class "icon-button"
+      ]
+      [ icon "fas fa-check-circle fa-lg" ]
 
-viewCancelButton = Html.button [Events.onClick CancelEdit, Att.class "btn btn-secondary"] [Html.text "Cancel"]
+viewCancelButton =
+  Html.button
+    [ Events.onClick CancelEdit
+    , Att.class "icon-button"
+    ]
+    [ icon "fas fa-times-circle fa-lg" ]
 
-viewTimeInputField event value =
+viewTimeInputField event value id =
   Html.input
     [ Events.onInput event
+    , Att.id id
     , Att.value value
     , Att.size 1
     , Att.maxlength 5
@@ -201,10 +216,10 @@ editDay input reports =
     Html.tr []
       [ textCell <| Date.toIsoString input.date
       , textCell <| Date.format "EE" input.date
-      , cell [viewTimeInputField InputStart input.start]
-      , cell [viewTimeInputField InputStop input.stop]
-      , cell [viewTimeInputField InputPause input.pause]
-      , cell [viewTimeInputField InputExpected input.expected]
+      , cell [viewTimeInputField InputStart input.start "start"]
+      , cell [viewTimeInputField InputStop input.stop "stop"]
+      , cell [viewTimeInputField InputPause input.pause "pause"]
+      , cell [viewTimeInputField InputExpected input.expected "expected"]
       , textCell workedTime
       , textCell diff
       , textCell totalValue

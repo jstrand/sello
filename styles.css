@@ -6,3 +6,11 @@ body {
 .toolbar {
     margin-bottom: 1em;
 }
+
+.icon-button {
+    margin: 0;
+    padding: 4px;
+    border: none;
+    color: none;
+    background: none;
+}
