@@ -8,14 +8,41 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
   <script src="main.js"></script>
+
+  <!-- Google Sign in -->
+  <meta name="google-signin-scope" content="profile">
+  <meta name="google-signin-client_id" content="570468669002-1fsigffjkekialqucuk76ods6psrt1df.apps.googleusercontent.com">
+  <script src="https://apis.google.com/js/platform.js" async defer></script>
+  <!-- / Google Sign in -->
 </head>
 
 <body>
+  <div class="jumbotron">
+      <h1 class="display-4">Welcome to Sello!</h1>
+      <p class="lead">This is a simple personal time keeper for checking in and out of work.</p>
+      <hr class="my-4">
+      <p>Sign in using your Google account below, or try the demo.</p>
+      <p class="lead">
+        <div style="display: inline-block" class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
+        <div style="display: inline-block"><button class="btn btn-primary" onclick="startApp('demo');" role="button">Try demo</button><div>
+      </p>
+  </div>
+
   <div id="elm"></div>
   <script>
-  var app = Elm.Main.init({
-    node: document.getElementById('elm')
-  });
+    var backend = "http://localhost:8001";
+
+    function startApp(token) {
+      var app = Elm.Main.init({
+        node: document.getElementById('elm'),
+        flags: [backend, token]
+      });
+    }
+    
+    function onSignIn(googleUser) {
+      startApp(googleUser.getAuthResponse().id_token);
+    };
+
   </script>
 </body>
 </html>

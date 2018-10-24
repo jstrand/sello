@@ -28,18 +28,34 @@ type alias Model =
   , showDate: Date
   , showInterval: Date.Unit
   , today: Date
+  , url: String
+  , token: String
   }
 
-url = "http://localhost:8001/sello/reports"
-
-saveReports : ReportDict -> Cmd Msg
-saveReports reports =
-  Http.post url (Http.jsonBody (encodeReports reports)) Decode.value
+saveReports : String -> String -> ReportDict -> Cmd Msg
+saveReports url token reports =
+  Http.request
+    { method = "POST"
+    , url = url
+    , headers = [Http.header "Authorization" token]
+    , body = Http.jsonBody (encodeReports reports)
+    , expect = Http.expectStringResponse (\_ -> Ok ())
+    , timeout = Nothing
+    , withCredentials = False
+    }
   |> Http.send SaveResult
 
-loadReports : Cmd Msg
-loadReports =
-  Http.get url decodeReports
+loadReports : String -> String -> Cmd Msg
+loadReports url token =
+  Http.request
+    { method = "GET"
+    , url = url
+    , headers = [Http.header "Authorization" token]
+    , body = Http.emptyBody
+    , expect = Http.expectJson decodeReports
+    , timeout = Nothing
+    , withCredentials = False
+    }
   |> Http.send LoadResult
 
 
@@ -51,7 +67,7 @@ type Msg
     | InputStop String
     | InputPause String
     | InputExpected String
-    | SaveResult (Result Http.Error Decode.Value)
+    | SaveResult (Result Http.Error ())
     | LoadResult (Result Http.Error ReportDict)
     | SetInterval Date.Unit
     | PreviousInterval
@@ -94,6 +110,7 @@ moveInterval offset model =
 previousInterval = moveInterval -1
 nextInterval = moveInterval 1
 
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
@@ -101,7 +118,7 @@ update msg model =
     CancelEdit -> (cancelReportInput model, Cmd.none)
     SaveEdit -> 
       let newModel = saveReportInput model
-      in ({ newModel | status = Saving }, saveReports newModel.reports)
+      in ({ newModel | status = Saving }, saveReports newModel.url newModel.token newModel.reports)
     InputStart start -> (saveField (saveStart start) model, Cmd.none)
     InputStop stop -> (saveField (saveStop stop) model, Cmd.none)
     InputPause pause -> (saveField (savePause pause) model, Cmd.none)
@@ -109,6 +126,11 @@ update msg model =
     SaveResult (Ok _) -> ({ model | status = Ready }, Cmd.none)
     SaveResult (Err error) -> failWith error model
     LoadResult (Ok reports) -> ({ model | reports = reports, status = Ready }, Cmd.none)
+    LoadResult (Err (Http.BadStatus description)) ->
+      if description.status.code == 404 then
+        (model, saveReports model.url model.token model.reports)
+      else
+        failWith description.status.message model
     LoadResult (Err error) -> failWith error model
     SetInterval interval -> ({ model | showInterval = interval }, Cmd.none)
     PreviousInterval -> (previousInterval model, Cmd.none)
@@ -138,10 +160,12 @@ textCell value = Html.td [] [Html.text <| value]
 
 timeCell = textCell << Report.showAsHoursAndMinutes
 
-viewEmptyDay : Bool -> Date -> ReportDict -> Html Msg
-viewEmptyDay editingOtherDay day reports =
+viewEmptyDay : Bool -> Bool -> Date -> ReportDict -> Html Msg
+viewEmptyDay today editingOtherDay day reports =
+  let dateFormat = if today then makeBold else identity
+  in
   Html.tr []
-    [ textCell <| Date.toIsoString day
+    [ Html.td [] [dateFormat (Html.text <| Date.toIsoString day)]
     , textCell <| Date.format "EE" day
     , emptyCell
     , emptyCell
@@ -153,10 +177,14 @@ viewEmptyDay editingOtherDay day reports =
     , editCell editingOtherDay day
     ]
 
-viewDay : Bool -> Date -> ReportDict -> Report -> Html Msg
-viewDay readOnly day reports report =
+makeBold v = Html.b [] [v]
+
+viewDay : Bool -> Bool -> Date -> ReportDict -> Report -> Html Msg
+viewDay today readOnly day reports report =
+  let dateFormat = if today then makeBold else identity
+  in
   Html.tr []
-    [ textCell <| Date.toIsoString day
+    [ Html.td [] [dateFormat (Html.text <| Date.toIsoString day)]
     , textCell <| Date.format "EE" day
     , timeCell report.start
     , timeCell <| Report.getEnd report
@@ -229,10 +257,11 @@ editDay input reports =
 viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
   let report = getReport model.reports day
+      isToday = model.today == day
       viewDayOrEmpty readOnly =
         report
-        |> Maybe.map (viewDay readOnly day model.reports)
-        |> Maybe.withDefault (viewEmptyDay readOnly day model.reports)
+        |> Maybe.map (viewDay isToday readOnly day model.reports)
+        |> Maybe.withDefault (viewEmptyDay isToday readOnly day model.reports)
   in
     case model.editing of
       Nothing -> viewDayOrEmpty (model.status == Saving)
@@ -347,7 +376,9 @@ datesInInterval model =
   let dayInInterval = model.showDate
       interval = dateUnitToInterval model.showInterval
       start = Date.floor interval dayInInterval
-      stop = Date.ceiling interval dayInInterval
+      -- add one day to stop, because Date.ceiling and Date.floor returns
+      -- the same date if it's the first day in the interval
+      stop = Date.add Date.Days 1 dayInInterval |> Date.ceiling interval
   in
     Date.range Date.Day 1 start stop
 
@@ -388,8 +419,8 @@ getTodaysDate = Date.today |> Task.perform SetToday
 
 fakeDate = Date.fromCalendarDate 2000 Time.Jan 1
 
-init : () -> (Model, Cmd Msg)
-init _ =
+init : (String, String) -> (Model, Cmd Msg)
+init (url, token) =
   ( Model
     Dict.empty
     Nothing
@@ -397,7 +428,9 @@ init _ =
     fakeDate
     Date.Weeks
     fakeDate
-  , Cmd.batch [loadReports, getTodaysDate]
+    url
+    token
+  , Cmd.batch [loadReports url token, getTodaysDate]
   )
 
 
