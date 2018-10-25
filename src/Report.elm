@@ -44,8 +44,8 @@ reportToInput date report =
 
 type alias Report =
   { start: Minutes
-  , minutesUntilStop: Minutes
-  , pausedMinutes: Minutes
+  , stop: Minutes
+  , pause: Minutes
   , expected: Minutes
   }
 
@@ -61,7 +61,7 @@ hoursAndMinutes : Int -> Int -> Int
 hoursAndMinutes h m = hours h + m
 
 getWorkedMinutes report =
-  report.minutesUntilStop - report.pausedMinutes
+  report.stop - report.start - report.pause
 
 getHoursAndMinutes : Minutes -> (Hours, Minutes)
 getHoursAndMinutes m =
@@ -79,10 +79,10 @@ getStart : Report -> Minutes
 getStart report = report.start
 
 getEnd : Report -> Minutes
-getEnd report = report.start + report.minutesUntilStop
+getEnd report = report.stop
 
 getPause : Report -> Int
-getPause report = report.pausedMinutes
+getPause report = report.pause
 
 getExpected : Report -> Minutes
 getExpected report = report.expected
@@ -121,11 +121,10 @@ parseReportInput : ReportInput -> Report
 parseReportInput report =
   let startInMinutes = parseTime report.start |> Maybe.withDefault 0
       stopInMinutes = parseTime report.stop |> Maybe.withDefault 0
-      minutesUntilStop = stopInMinutes - startInMinutes
       expectedMinutes = parseTime report.expected |> Maybe.withDefault 0
       pauseInMinutes = parseTime report.pause |> Maybe.withDefault 0
   in
-    Report startInMinutes minutesUntilStop pauseInMinutes expectedMinutes
+    Report startInMinutes stopInMinutes pauseInMinutes expectedMinutes
 
 
 inputOk : ReportInput -> Bool
@@ -162,8 +161,8 @@ encodeReport ratadie report =
   Encode.object
     [ ("dateAsRataDie", ratadie |> Encode.int)
     , ("start", report.start |> Encode.int)
-    , ("duration", report.minutesUntilStop |> Encode.int)
-    , ("pause", report.pausedMinutes |> Encode.int)
+    , ("stop", report.stop |> Encode.int)
+    , ("pause", report.pause |> Encode.int)
     , ("expected", report.expected |> Encode.int)
     ]
 
@@ -171,7 +170,7 @@ decodeReport : Decode.Decoder Report
 decodeReport =
   Decode.map4 Report
       (Decode.field "start" Decode.int)
-      (Decode.field "duration" Decode.int)
+      (Decode.field "stop" Decode.int)
       (Decode.field "pause" Decode.int)
       (Decode.field "expected" Decode.int)
 

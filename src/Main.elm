@@ -186,10 +186,10 @@ viewDay today readOnly day reports report =
   Html.tr []
     [ Html.td [] [dateFormat (Html.text <| Date.toIsoString day)]
     , textCell <| Date.format "EE" day
-    , timeCell report.start
-    , timeCell report.pausedMinutes
+    , timeCell <| Report.getStart report
+    , timeCell <| Report.getPause report
     , timeCell <| Report.getEnd report
-    , timeCell report.expected
+    , timeCell <| Report.getExpected report
     , timeCell <| Report.getWorkedMinutes report
     , timeCell <| Report.getDiff report
     , timeCell <| runningTotal reports day
