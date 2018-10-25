@@ -35,24 +35,30 @@ saveExpected expected input =
 
 reportToInput : Date -> Report -> ReportInput
 reportToInput date report =
-  ReportInput
-    date
-    (showAsHoursAndMinutes (getStart report))
-    (showAsHoursAndMinutes (getEnd report))
-    (showAsHoursAndMinutes (getPause report))
-    (showAsHoursAndMinutes (getExpected report))
+  let
+    format getter =
+      report
+      |> getter
+      |> Maybe.map showAsHoursAndMinutes
+      |> Maybe.withDefault ""
+  in
+    ReportInput
+      date
+      (format getStart)
+      (format getEnd)
+      (format getPause)
+      (format getExpected)
+
 
 type alias Report =
-  { start: Minutes
-  , stop: Minutes
-  , pause: Minutes
-  , expected: Minutes
+  { start: Maybe Minutes
+  , stop: Maybe Minutes
+  , pause: Maybe Minutes
+  , expected: Maybe Minutes
   }
 
-type alias ReportValidation =
-  { startValid: Bool
-  , endValid: Bool
-  }
+emptyReport =
+  Report Nothing Nothing Nothing Nothing
 
 hours : Minutes -> Hours
 hours h = h * 60
@@ -60,8 +66,13 @@ hours h = h * 60
 hoursAndMinutes : Int -> Int -> Int
 hoursAndMinutes h m = hours h + m
 
+getWorkedMinutes : Report -> Maybe Minutes
 getWorkedMinutes report =
-  report.stop - report.start - report.pause
+  let
+      calc start stop pause =
+        stop - start - pause
+  in
+    Maybe.map3 calc report.start report.stop report.pause
 
 getHoursAndMinutes : Minutes -> (Hours, Minutes)
 getHoursAndMinutes m =
@@ -75,20 +86,24 @@ showAsHoursAndMinutes time =
   in
     sign ++ format h ++ ":" ++ format m
 
-getStart : Report -> Minutes
+getStart : Report -> Maybe Minutes
 getStart report = report.start
 
-getEnd : Report -> Minutes
+getEnd : Report -> Maybe Minutes
 getEnd report = report.stop
 
-getPause : Report -> Int
+getPause : Report -> Maybe Minutes
 getPause report = report.pause
 
-getExpected : Report -> Minutes
+getExpected : Report -> Maybe Minutes
 getExpected report = report.expected
 
-getDiff : Report -> Minutes
-getDiff report = getWorkedMinutes report - getExpected report
+getDiff : Report -> Maybe Minutes
+getDiff report =
+  Maybe.map2
+    (\worked expected -> worked - expected)
+    (getWorkedMinutes report)
+    (getExpected report)
 
 inRange : Int -> Int -> Int -> Bool
 inRange min max value = value >= min && value <= max
@@ -119,66 +134,77 @@ isValidTimeInput time =
 
 parseReportInput : ReportInput -> Report
 parseReportInput report =
-  let startInMinutes = parseTime report.start |> Maybe.withDefault 0
-      stopInMinutes = parseTime report.stop |> Maybe.withDefault 0
-      expectedMinutes = parseTime report.expected |> Maybe.withDefault 0
-      pauseInMinutes = parseTime report.pause |> Maybe.withDefault 0
-  in
-    Report startInMinutes stopInMinutes pauseInMinutes expectedMinutes
+  Report
+    (parseTime report.start)
+    (parseTime report.stop)
+    (parseTime report.pause)
+    (parseTime report.expected)
 
 
 inputOk : ReportInput -> Bool
 inputOk = List.isEmpty << inputErrors
 
+checkStartBeforeStop start stop =
+  if start >= stop then
+    ["You have to start before you stop"]
+  else
+    []
+
 inputErrors : ReportInput -> List String
 inputErrors input =
-  let maybeStart = parseTime input.start
-      maybeStop = parseTime input.stop
-      maybePause = parseTime input.pause
-      maybeExpected = parseTime input.expected
-      startBeforeStopError =
-        case (maybeStart, maybeStop) of
-          (Just startMinutes, Just stopMinutes) ->
-            if startMinutes >= stopMinutes then
-              ["You have to start before you stop"]
-            else
-              []
+  let startBeforeStopError =
+        case (parseTime input.start, parseTime input.stop) of
+          (Just start, Just stop) ->
+            checkStartBeforeStop start stop
           _ -> []
       nothingError caption value =
-        case value of
-          Just _ -> []
-          _ -> [caption]
+        case (parseTime value, value) of
+          (Just _, _) -> []
+          (Nothing, "") -> []
+          (Nothing, _) -> [caption]          
   in
     startBeforeStopError
-    ++ nothingError "What up with start" maybeStart
-    ++ nothingError "What up with stop" maybeStop
-    ++ nothingError "What up with pause" maybePause
-    ++ nothingError "What up with expected" maybeExpected
+    ++ nothingError "What up with start" input.start
+    ++ nothingError "What up with stop" input.stop
+    ++ nothingError "What up with pause" input.pause
+    ++ nothingError "What up with expected" input.expected
 
 
 encodeReport : Int -> Report -> Encode.Value
-encodeReport ratadie report = 
-  Encode.object
-    [ ("dateAsRataDie", ratadie |> Encode.int)
-    , ("start", report.start |> Encode.int)
-    , ("stop", report.stop |> Encode.int)
-    , ("pause", report.pause |> Encode.int)
-    , ("expected", report.expected |> Encode.int)
-    ]
+encodeReport ratadie report =
+  let
+    maybeEncode name maybeValue =
+      case maybeValue of
+          Just value -> [(name, value |> Encode.int)]
+          Nothing -> []
+  in
+    Encode.object
+      ([ ("dateAsRataDie", ratadie |> Encode.int)
+      ]
+      ++ maybeEncode "start" report.start
+      ++ maybeEncode "stop" report.stop
+      ++ maybeEncode "pause" report.pause
+      ++ maybeEncode "expected" report.expected
+      )
 
 decodeReport : Decode.Decoder Report
 decodeReport =
-  Decode.map4 Report
-      (Decode.field "start" Decode.int)
-      (Decode.field "stop" Decode.int)
-      (Decode.field "pause" Decode.int)
-      (Decode.field "expected" Decode.int)
+  let
+    maybeDecodeInt fieldName =
+      Decode.maybe (Decode.field fieldName Decode.int)
+  in
+    Decode.map4 Report
+      (maybeDecodeInt "start")
+      (maybeDecodeInt "stop")
+      (maybeDecodeInt "pause")
+      (maybeDecodeInt "expected")
 
 type alias ReportDict = Dict Int Report
 
 encodeReports : ReportDict -> Encode.Value
 encodeReports reports =
-  Dict.map encodeReport reports
+  Dict.filter (\key value -> value /= emptyReport) reports
+  |> Dict.map encodeReport
   |> Dict.values
   |> Encode.list identity
 
@@ -202,7 +228,8 @@ runningTotal reports date =
   let
     before reportForDay _ = reportForDay <= (Date.toRataDie date) 
     reportsUntil = Dict.filter before reports |> Dict.values
-    sum report acc = acc + (getDiff report)
+    diff report = Maybe.withDefault 0 (getDiff report)
+    sum report acc = acc + (diff report)
   in
     List.foldl sum 0 reportsUntil
 
@@ -212,7 +239,13 @@ saveReport reportInput reports =
 
 getReport : ReportDict -> Date -> Maybe Report
 getReport reports date =
-  Dict.get (Date.toRataDie date) reports
+    Dict.get (Date.toRataDie date) reports
+
+getReportOrEmpty : ReportDict -> Date -> Report
+getReportOrEmpty reports date =
+  Maybe.withDefault
+    emptyReport
+    (getReport reports date)
 
 defaultInput : Date -> ReportInput
 defaultInput date =

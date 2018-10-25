@@ -158,24 +158,12 @@ cellWithOne one = cell [one]
 
 textCell value = Html.td [] [Html.text <| value]
 
+timeCell : Minutes -> Html Msg
 timeCell = textCell << Report.showAsHoursAndMinutes
 
-viewEmptyDay : Bool -> Bool -> Date -> ReportDict -> Html Msg
-viewEmptyDay today editingOtherDay day reports =
-  let dateFormat = if today then makeBold else identity
-  in
-  Html.tr []
-    [ Html.td [] [dateFormat (Html.text <| Date.toIsoString day)]
-    , textCell <| Date.format "EE" day
-    , emptyCell
-    , emptyCell
-    , emptyCell
-    , emptyCell
-    , emptyCell
-    , emptyCell
-    , emptyCell
-    , editCell editingOtherDay day
-    ]
+timeCellOrEmpty : Maybe Minutes -> Html Msg
+timeCellOrEmpty value =
+  Maybe.withDefault emptyCell (Maybe.map timeCell value)
 
 makeBold v = Html.b [] [v]
 
@@ -186,12 +174,12 @@ viewDay today readOnly day reports report =
   Html.tr []
     [ Html.td [] [dateFormat (Html.text <| Date.toIsoString day)]
     , textCell <| Date.format "EE" day
-    , timeCell <| Report.getStart report
-    , timeCell <| Report.getPause report
-    , timeCell <| Report.getEnd report
-    , timeCell <| Report.getExpected report
-    , timeCell <| Report.getWorkedMinutes report
-    , timeCell <| Report.getDiff report
+    , timeCellOrEmpty <| Report.getStart report
+    , timeCellOrEmpty <| Report.getPause report
+    , timeCellOrEmpty <| Report.getEnd report
+    , timeCellOrEmpty <| Report.getExpected report
+    , timeCellOrEmpty <| Report.getWorkedMinutes report
+    , timeCellOrEmpty <| Report.getDiff report
     , timeCell <| runningTotal reports day
     , editCell readOnly day
     ]
@@ -236,10 +224,10 @@ editDay input reports =
     inputOk = inputErrors input |> List.isEmpty
     valueOrEmpty value = if inputOk then value else ""
     potentialReport = parseReportInput input
-    workedTime = potentialReport |> getWorkedMinutes |> Report.showAsHoursAndMinutes |> valueOrEmpty
-    diff = potentialReport |> getDiff |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    workedTime = potentialReport |> getWorkedMinutes
+    diff = potentialReport |> getDiff
     potentialReports = saveReport input reports
-    totalValue = runningTotal potentialReports input.date |> Report.showAsHoursAndMinutes |> valueOrEmpty
+    totalValue = runningTotal potentialReports input.date |> Report.showAsHoursAndMinutes
   in
     Html.tr []
       [ textCell <| Date.toIsoString input.date
@@ -248,20 +236,18 @@ editDay input reports =
       , cell [viewTimeInputField InputPause input.pause "pause"]
       , cell [viewTimeInputField InputStop input.stop "stop"]
       , cell [viewTimeInputField InputExpected input.expected "expected"]
-      , textCell workedTime
-      , textCell diff
+      , timeCellOrEmpty workedTime
+      , timeCellOrEmpty diff
       , textCell totalValue
       , cell [viewOkButton input, viewCancelButton]
       ]
 
 viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
-  let report = getReport model.reports day
+  let report = getReportOrEmpty model.reports day
       isToday = model.today == day
       viewDayOrEmpty readOnly =
-        report
-        |> Maybe.map (viewDay isToday readOnly day model.reports)
-        |> Maybe.withDefault (viewEmptyDay isToday readOnly day model.reports)
+        viewDay isToday readOnly day model.reports report
   in
     case model.editing of
       Nothing -> viewDayOrEmpty (model.status == Saving)
