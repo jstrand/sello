@@ -187,8 +187,8 @@ viewDay today readOnly day reports report =
     [ Html.td [] [dateFormat (Html.text <| Date.toIsoString day)]
     , textCell <| Date.format "EE" day
     , timeCell report.start
-    , timeCell <| Report.getEnd report
     , timeCell report.pausedMinutes
+    , timeCell <| Report.getEnd report
     , timeCell report.expected
     , timeCell <| Report.getWorkedMinutes report
     , timeCell <| Report.getDiff report
@@ -245,8 +245,8 @@ editDay input reports =
       [ textCell <| Date.toIsoString input.date
       , textCell <| Date.format "EE" input.date
       , cell [viewTimeInputField InputStart input.start "start"]
-      , cell [viewTimeInputField InputStop input.stop "stop"]
       , cell [viewTimeInputField InputPause input.pause "pause"]
+      , cell [viewTimeInputField InputStop input.stop "stop"]
       , cell [viewTimeInputField InputExpected input.expected "expected"]
       , textCell workedTime
       , textCell diff
@@ -284,8 +284,8 @@ reportHeaders =
   List.map timeColumnHeader
     [ "Day"
     , "Start"
-    , "Stop"
     , "Pause"
+    , "Stop"
     , "Expected"
     , "Worked"
     , "Diff"
