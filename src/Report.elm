@@ -68,11 +68,10 @@ hoursAndMinutes h m = hours h + m
 
 getWorkedMinutes : Report -> Maybe Minutes
 getWorkedMinutes report =
-  let
-      calc start stop pause =
-        stop - start - pause
-  in
-    Maybe.map3 calc report.start report.stop report.pause
+  case (report.start, report.stop, report.pause) of
+    (Just start, Just stop, Just pause) -> Just <| stop - start - pause
+    (Just start, Just stop, Nothing) -> Just <| stop - start
+    _ -> Nothing
 
 getHoursAndMinutes : Minutes -> (Hours, Minutes)
 getHoursAndMinutes m =
@@ -100,10 +99,10 @@ getExpected report = report.expected
 
 getDiff : Report -> Maybe Minutes
 getDiff report =
-  Maybe.map2
-    (\worked expected -> worked - expected)
-    (getWorkedMinutes report)
-    (getExpected report)
+  case (getExpected report, getWorkedMinutes report) of
+    (Just expected, Just worked) -> Just <| worked - expected
+    (Just expected, Nothing) -> Just <| -expected
+    _ -> Nothing
 
 inRange : Int -> Int -> Int -> Bool
 inRange min max value = value >= min && value <= max
