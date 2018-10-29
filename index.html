@@ -21,16 +21,15 @@
       <h1 class="display-4">Welcome to Sello!</h1>
       <p class="lead">This is a simple personal time keeper for checking in and out of work.</p>
       <hr class="my-4">
-      <p>Sign in using your Google account below, or try the demo.</p>
+      <p>Sign in using your Google account below.</p>
       <p class="lead">
         <div style="display: inline-block" class="g-signin2" data-onsuccess="onSignIn" data-theme="dark"></div>
-        <div style="display: inline-block"><button class="btn btn-primary" onclick="startApp('demo');" role="button">Try demo</button><div>
       </p>
   </div>
 
   <div id="elm"></div>
   <script>
-    var backend = "http://localhost:8001";
+    var backend = "http://localhost:8001/reports";
 
     function startApp(token) {
       var app = Elm.Main.init({

@@ -3,8 +3,9 @@ elm-stuff/
 # elm-repl generated files
 repl-temp-*
 
-client/src/index.html
 .AppleDouble
+.DS_Store
+.vscode
 
 main.js
 deploy.sh

@@ -1,1 +1,1 @@
-elm-live src/Main.elm --open --start-page=src/dev.html -- --output=main.js
+elm-live src/Main.elm --open --start-page=dev.html -- --output=main.js
