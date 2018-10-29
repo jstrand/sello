@@ -1,16 +1,11 @@
 module Main exposing (..)
 
-import Tuple exposing (pair)
 import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
 import Browser
 import Time
-import DateFormat
-import Dict exposing (Dict)
 import Date exposing (Date)
-import Json.Encode as Encode
-import Json.Decode as Decode
 import Http
 import Task
 import Browser.Dom as Dom
@@ -383,7 +378,7 @@ fakeDate = Date.fromCalendarDate 2000 Time.Jan 1
 init : (String, String) -> (Model, Cmd Msg)
 init (url, token) =
   ( Model
-    Dict.empty
+    Report.noReports
     Nothing
     Loading
     fakeDate

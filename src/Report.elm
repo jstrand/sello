@@ -200,6 +200,8 @@ decodeReport =
 
 type alias ReportDict = Dict Int Report
 
+noReports = Dict.empty
+
 encodeReports : ReportDict -> Encode.Value
 encodeReports reports =
   Dict.filter (\key value -> value /= emptyReport) reports
