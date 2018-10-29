@@ -16,7 +16,7 @@ import Task
 import Browser.Dom as Dom
 
 import Report exposing (..)
-
+import Storage exposing (saveReports, loadReports)
 
 type AppStatus = Loading | Saving | Ready | Failure String
 
@@ -31,32 +31,6 @@ type alias Model =
   , url: String
   , token: String
   }
-
-saveReports : String -> String -> ReportDict -> Cmd Msg
-saveReports url token reports =
-  Http.request
-    { method = "POST"
-    , url = url
-    , headers = [Http.header "Authorization" token]
-    , body = Http.jsonBody (encodeReports reports)
-    , expect = Http.expectStringResponse (\_ -> Ok ())
-    , timeout = Nothing
-    , withCredentials = False
-    }
-  |> Http.send SaveResult
-
-loadReports : String -> String -> Cmd Msg
-loadReports url token =
-  Http.request
-    { method = "GET"
-    , url = url
-    , headers = [Http.header "Authorization" token]
-    , body = Http.emptyBody
-    , expect = Http.expectJson decodeReports
-    , timeout = Nothing
-    , withCredentials = False
-    }
-  |> Http.send LoadResult
 
 
 type Msg
@@ -74,6 +48,7 @@ type Msg
     | NextInterval
     | SetToday Date
     | GotoToday
+
 
 startReportInput model date =
   { model | editing = Just (getReportInput model.reports date) }
@@ -118,7 +93,7 @@ update msg model =
     CancelEdit -> (cancelReportInput model, Cmd.none)
     SaveEdit -> 
       let newModel = saveReportInput model
-      in ({ newModel | status = Saving }, saveReports newModel.url newModel.token newModel.reports)
+      in ({ newModel | status = Saving }, saveReports newModel.url newModel.token newModel.reports SaveResult)
     InputStart start -> (saveField (saveStart start) model, Cmd.none)
     InputStop stop -> (saveField (saveStop stop) model, Cmd.none)
     InputPause pause -> (saveField (savePause pause) model, Cmd.none)
@@ -128,7 +103,7 @@ update msg model =
     LoadResult (Ok reports) -> ({ model | reports = reports, status = Ready }, Cmd.none)
     LoadResult (Err (Http.BadStatus description)) ->
       if description.status.code == 404 then
-        (model, saveReports model.url model.token model.reports)
+        (model, saveReports model.url model.token model.reports SaveResult)
       else
         failWith description.status.message model
     LoadResult (Err error) -> failWith error model
@@ -416,7 +391,7 @@ init (url, token) =
     fakeDate
     url
     token
-  , Cmd.batch [loadReports url token, getTodaysDate]
+  , Cmd.batch [loadReports url token LoadResult, getTodaysDate]
   )
 
 
