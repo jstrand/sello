@@ -202,6 +202,12 @@ type alias ReportDict = Dict Int Report
 
 noReports = Dict.empty
 
+reportsToList : ReportDict -> List (Date, Report)
+reportsToList reports =
+  reports
+  |> Dict.toList
+  |> List.map (Tuple.mapFirst Date.fromRataDie) 
+
 encodeReports : ReportDict -> Encode.Value
 encodeReports reports =
   Dict.filter (\key value -> value /= emptyReport) reports
