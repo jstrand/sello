@@ -69,8 +69,8 @@ hoursAndMinutes h m = hours h + m
 getWorkedMinutesWithNegative : Report -> Maybe Minutes
 getWorkedMinutesWithNegative report =
   case (report.start, report.stop, report.pause) of
-    (Just start, Just stop, Just pause) -> Just <| stop - start - pause
-    (Just start, Just stop, Nothing) -> Just <| stop - start
+    (Just start, Just stop, maybePause)
+      -> Just <| stop - start - (Maybe.withDefault 0 maybePause)
     _ -> Nothing
 
 getWorkedMinutes : Report -> Maybe Minutes
@@ -107,10 +107,17 @@ getExpected report = report.expected
 
 getDiff : Report -> Maybe Minutes
 getDiff report =
-  case (getExpected report, getWorkedMinutes report) of
-    (Just expected, Just worked) -> Just <| worked - expected
-    (Just expected, Nothing) -> Just <| -expected
-    _ -> Nothing
+  getDiffResult report
+  |> Result.toMaybe
+  |> Maybe.withDefault Nothing
+
+getDiffResult : Report -> Result String (Maybe Minutes)
+getDiffResult report =
+  case (getWorkedMinutes report, getExpected report) of
+  (Just worked, Just expected) -> worked - expected |> Just |> Ok
+  (Just _, Nothing) -> Err "No expected time!"
+  (Nothing, Just _) -> Err "No worked time!"
+  _ -> Ok Nothing
 
 inRange : Int -> Int -> Int -> Bool
 inRange min max value = value >= min && value <= max

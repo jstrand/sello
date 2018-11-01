@@ -138,6 +138,12 @@ timeCellOrEmpty value =
 
 makeBold v = Html.b [] [v]
 
+viewDiff : Report -> Html Msg
+viewDiff report =
+  case Report.getDiffResult report of
+  Ok maybeDiff -> timeCellOrEmpty maybeDiff
+  Err warning -> Html.td [Att.title warning] [warningIcon]
+
 viewDay : Bool -> Bool -> Date -> String -> Report -> Html Msg
 viewDay today readOnly day total report =
   let dateFormat = if today then makeBold else identity
@@ -150,13 +156,15 @@ viewDay today readOnly day total report =
     , timeCellOrEmpty <| Report.getEnd report
     , timeCellOrEmpty <| Report.getExpected report
     , timeCellOrEmpty <| Report.getWorkedMinutes report
-    , timeCellOrEmpty <| Report.getDiff report
+    , viewDiff report
     , textCell total
     , editCell readOnly day
     ]
 
 icon class =
   Html.i [Att.class class] []
+
+warningIcon = icon "fas fa-exclamation-triangle fa-lg"
 
 viewOkButton input =
   let disabledIfErr =
@@ -193,10 +201,8 @@ editDay : ReportInput -> String -> Html Msg
 editDay input total =
   let
     inputOk = inputErrors input |> List.isEmpty
-    valueOrEmpty value = if inputOk then value else ""
     potentialReport = parseReportInput input
     workedTime = potentialReport |> getWorkedMinutes
-    diff = potentialReport |> getDiff
   in
     Html.tr []
       [ textCell <| Date.toIsoString input.date
@@ -206,7 +212,7 @@ editDay input total =
       , cell [viewTimeInputField InputStop input.stop "stop"]
       , cell [viewTimeInputField InputExpected input.expected "expected"]
       , timeCellOrEmpty workedTime
-      , timeCellOrEmpty diff
+      , viewDiff potentialReport
       , textCell total
       , cell [viewOkButton input, viewCancelButton]
       ]
