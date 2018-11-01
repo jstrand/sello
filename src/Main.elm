@@ -288,20 +288,21 @@ viewInterval model =
         ]
         [ Html.text caption ]
 
-intervalButtons =
+intervalButtons activeInterval =
   Html.div
     [ Att.class "btn-group"
     ]
-    [ intervalButton Date.Years "Year"
-    , intervalButton Date.Months "Month"
-    , intervalButton Date.Weeks "Week"
+    [ intervalButton Date.Years (activeInterval == Date.Years) "Year"
+    , intervalButton Date.Months (activeInterval == Date.Months) "Month"
+    , intervalButton Date.Weeks (activeInterval == Date.Weeks) "Week"
     ]
 
-intervalButton : Date.Unit -> String -> Html Msg
-intervalButton interval caption =
+intervalButton : Date.Unit -> Bool -> String -> Html Msg
+intervalButton interval active caption =
   Html.button
     [ Events.onClick <| SetInterval interval
     , Att.class "btn btn-dark"
+    , Att.disabled active
     ]
     [ Html.text caption ]
 
@@ -330,7 +331,7 @@ viewNavigation model =
   Html.div [ Att.class "toolbar" ]
     [ moveButtons model
     , separator
-    , intervalButtons
+    , intervalButtons model.showInterval
     ]
 
 dateUnitToInterval : Date.Unit -> Date.Interval
