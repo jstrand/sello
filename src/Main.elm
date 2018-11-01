@@ -22,6 +22,7 @@ type alias Model =
   , status: AppStatus
   , showDate: Date
   , showInterval: Date.Unit
+  , showDays: List Time.Weekday
   , today: Date
   , url: String
   , token: String
@@ -42,6 +43,7 @@ type Msg
     | PreviousInterval
     | NextInterval
     | SetToday Date
+    | ToggleWeekday Time.Weekday
     | GotoToday
     | NoOp
 
@@ -108,6 +110,20 @@ update msg model =
     NextInterval -> (nextInterval model, Cmd.none)
     SetToday date -> ({ model | showDate = date, today = date }, Cmd.none)
     GotoToday -> (model, getTodaysDate)
+    ToggleWeekday day -> (toggleWeekday day model, Cmd.none)
+
+
+showingDay = List.member
+shouldShowDate : List Time.Weekday -> Date -> Bool
+shouldShowDate showDays date =
+  showingDay (Date.weekday date) showDays
+removeDay day = List.filter (\e -> e /= day)
+
+toggleWeekday day model =
+  if showingDay day model.showDays then
+    { model | showDays = removeDay day model.showDays}
+  else
+    { model | showDays = day :: model.showDays }
 
 
 editCell readOnly day =
@@ -327,11 +343,42 @@ moveButtons model =
 
 separator = Html.text " "
 
+weekdayName weekday =
+  case weekday of
+    Time.Mon -> "Mon"
+    Time.Tue -> "Tue"
+    Time.Wed -> "Wed"
+    Time.Thu -> "Thu"
+    Time.Fri -> "Fri"
+    Time.Sat -> "Sat"
+    Time.Sun -> "Sun"
+
+weekdayButton selected weekday =
+  let
+    class = if List.member weekday selected then
+      "btn-dark" else "btn-outline-dark"
+  in
+    Html.button
+      [ Att.class "btn"
+      , Att.class class
+      , Events.onClick (ToggleWeekday weekday)
+      ]
+      [ Html.text (weekdayName weekday) ]
+
+weekdayButtons : List Time.Weekday -> Html Msg
+weekdayButtons weekdays =
+  Html.div
+  [ Att.class "btn-group" ]
+  (List.map (weekdayButton weekdays)
+    [ Time.Mon, Time.Tue, Time.Wed, Time.Thu, Time.Fri, Time.Sat, Time.Sun ])
+
 viewNavigation model =
   Html.div [ Att.class "toolbar" ]
     [ moveButtons model
     , separator
     , intervalButtons model.showInterval
+    , separator
+    , weekdayButtons model.showDays
     ]
 
 dateUnitToInterval : Date.Unit -> Date.Interval
@@ -352,6 +399,7 @@ datesInInterval model =
       stop = Date.add Date.Days 1 dayInInterval |> Date.ceiling interval
   in
     Date.range Date.Day 1 start stop
+    |> List.filter (shouldShowDate model.showDays)
 
 viewReports : Model -> List (Html Msg)
 viewReports model =
@@ -398,6 +446,7 @@ init (url, token) =
     Loading
     fakeDate
     Date.Weeks
+    [Time.Mon, Time.Tue, Time.Wed, Time.Thu, Time.Fri]
     fakeDate
     url
     token
