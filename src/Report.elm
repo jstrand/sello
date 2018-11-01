@@ -66,12 +66,20 @@ hours h = h * 60
 hoursAndMinutes : Int -> Int -> Int
 hoursAndMinutes h m = hours h + m
 
-getWorkedMinutes : Report -> Maybe Minutes
-getWorkedMinutes report =
+getWorkedMinutesWithNegative : Report -> Maybe Minutes
+getWorkedMinutesWithNegative report =
   case (report.start, report.stop, report.pause) of
     (Just start, Just stop, Just pause) -> Just <| stop - start - pause
     (Just start, Just stop, Nothing) -> Just <| stop - start
     _ -> Nothing
+
+getWorkedMinutes : Report -> Maybe Minutes
+getWorkedMinutes report =
+  let
+      negativeIsNothing x = if x < 0 then Nothing else Just x
+  in
+    getWorkedMinutesWithNegative report
+    |> Maybe.andThen negativeIsNothing
 
 getHoursAndMinutes : Minutes -> (Hours, Minutes)
 getHoursAndMinutes m =
@@ -151,7 +159,9 @@ checkStartBeforeStop start stop =
 
 inputErrors : ReportInput -> List String
 inputErrors input =
-  let startBeforeStopError =
+  let
+      report = parseReportInput input
+      startBeforeStopError =
         case (parseTime input.start, parseTime input.stop) of
           (Just start, Just stop) ->
             checkStartBeforeStop start stop
@@ -160,13 +170,19 @@ inputErrors input =
         case (parseTime value, value) of
           (Just _, _) -> []
           (Nothing, "") -> []
-          (Nothing, _) -> [caption]          
+          (Nothing, _) -> [caption]
+      tooMuchPause =
+        if Maybe.withDefault 0 (getWorkedMinutesWithNegative report) < 0 then
+          ["Too much pause!"]
+        else
+          []
   in
     startBeforeStopError
     ++ nothingError "What up with start" input.start
     ++ nothingError "What up with stop" input.stop
     ++ nothingError "What up with pause" input.pause
     ++ nothingError "What up with expected" input.expected
+    ++ tooMuchPause
 
 
 encodeReport : Int -> Report -> Encode.Value
