@@ -43,7 +43,7 @@ type Msg
     | NextInterval
     | SetToday Date
     | GotoToday
-
+    | NoOp
 
 startReportInput model date =
   { model | editing = Just (getReportInput model.reports date) }
@@ -84,7 +84,8 @@ nextInterval = moveInterval 1
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    StartEdit date -> (startReportInput model date, Task.attempt (\_ -> GotoToday) (Dom.focus "start"))
+    NoOp -> (model, Cmd.none)
+    StartEdit date -> (startReportInput model date, Task.attempt (\_ -> NoOp) (Dom.focus "start"))
     CancelEdit -> (cancelReportInput model, Cmd.none)
     SaveEdit -> 
       let newModel = saveReportInput model
