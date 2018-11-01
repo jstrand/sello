@@ -138,8 +138,8 @@ timeCellOrEmpty value =
 
 makeBold v = Html.b [] [v]
 
-viewDay : Bool -> Bool -> Date -> ReportDict -> Report -> Html Msg
-viewDay today readOnly day reports report =
+viewDay : Bool -> Bool -> Date -> String -> Report -> Html Msg
+viewDay today readOnly day total report =
   let dateFormat = if today then makeBold else identity
   in
   Html.tr []
@@ -151,7 +151,7 @@ viewDay today readOnly day reports report =
     , timeCellOrEmpty <| Report.getExpected report
     , timeCellOrEmpty <| Report.getWorkedMinutes report
     , timeCellOrEmpty <| Report.getDiff report
-    , timeCell <| runningTotal reports day
+    , textCell total
     , editCell readOnly day
     ]
 
@@ -189,16 +189,14 @@ viewTimeInputField event value id =
     ]
     []
 
-editDay : ReportInput -> ReportDict -> Html Msg
-editDay input reports =
+editDay : ReportInput -> String -> Html Msg
+editDay input total =
   let
     inputOk = inputErrors input |> List.isEmpty
     valueOrEmpty value = if inputOk then value else ""
     potentialReport = parseReportInput input
     workedTime = potentialReport |> getWorkedMinutes
     diff = potentialReport |> getDiff
-    potentialReports = saveReport input reports
-    totalValue = runningTotal potentialReports input.date |> Report.showAsHoursAndMinutes
   in
     Html.tr []
       [ textCell <| Date.toIsoString input.date
@@ -209,7 +207,7 @@ editDay input reports =
       , cell [viewTimeInputField InputExpected input.expected "expected"]
       , timeCellOrEmpty workedTime
       , timeCellOrEmpty diff
-      , textCell totalValue
+      , textCell total
       , cell [viewOkButton input, viewCancelButton]
       ]
 
@@ -217,12 +215,21 @@ viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
   let report = getReportOrEmpty model.reports day
       isToday = model.today == day
+      totalValue reports date = runningTotal reports date |> Report.showAsHoursAndMinutes
       viewDayOrEmpty readOnly =
-        viewDay isToday readOnly day model.reports report
+        viewDay isToday readOnly day (totalValue model.reports day) report
   in
     case model.editing of
       Nothing -> viewDayOrEmpty (model.status == Saving)
-      Just input -> if day == input.date then editDay input model.reports else viewDayOrEmpty True
+      Just input ->
+        let
+          reportsWithEdit = saveReport input model.reports
+          total = runningTotal reportsWithEdit day |> Report.showAsHoursAndMinutes
+        in
+          if day == input.date then
+            editDay input total
+          else
+            viewDay isToday True day total report
 
 timeColumnHeader caption =
   Html.th
