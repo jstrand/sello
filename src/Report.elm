@@ -116,6 +116,7 @@ getDiffResult report =
   case (getWorkedMinutes report, getExpected report) of
   (Just worked, Just expected) -> worked - expected |> Just |> Ok
   (Just _, Nothing) -> Err "No expected time!"
+  (Nothing, Just 0) -> Ok Nothing
   (Nothing, Just _) -> Err "No worked time!"
   _ -> Ok Nothing
 
