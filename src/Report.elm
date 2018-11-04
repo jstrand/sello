@@ -1,6 +1,34 @@
-module Report exposing (Hours, Minutes, Report, ReportDict, ReportInput, checkStartBeforeStop, decodeReport, decodeReportWithDate, decodeReports, decodeReportsPerDay, defaultInput, emptyReport, encodeReport, encodeReports, getDiff, getDiffResult, getEnd, getExpected, getHoursAndMinutes, getPause, getReport, getReportInput, getReportOrEmpty, getStart, getWorkedMinutes, getWorkedMinutesWithNegative, hours, hoursAndMinutes, inRange, inputErrors, inputOk, isValidTimeInput, noReports, parseReportInput, parseTime, reportToInput, reportsToList, runningTotal, saveExpected, savePause, saveReport, saveStart, saveStop, showAsHoursAndMinutes, validHours, validMinutes)
+module Report exposing
+    ( Input
+    , Minutes
+    , Report
+    , Reports
+    , decodeReports
+    , defaultInput
+    , encode
+    , encodeReports
+    , getDiffResult
+    , getEnd
+    , getExpected
+    , getHoursAndMinutes
+    , getInput
+    , getPause
+    , getReportOrEmpty
+    , getStart
+    , getWorkedMinutes
+    , inputErrors
+    , noReports
+    , parseInput
+    , runningTotal
+    , saveExpected
+    , saveInput
+    , savePause
+    , saveStart
+    , saveStop
+    , showAsHoursAndMinutes
+    )
 
-import Date exposing (Date, toRataDie)
+import Date exposing (Date)
 import Dict exposing (Dict)
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -9,10 +37,13 @@ import Time exposing (Month(..))
 import Tuple exposing (pair)
 
 
+{-| Minutes since midnight
+For example:
 
--- Minutes since midnight 0 -> 00:00
+    0 = 00:00
+    480 = 08:00
 
-
+-}
 type alias Minutes =
     Int
 
@@ -21,7 +52,7 @@ type alias Hours =
     Int
 
 
-type alias ReportInput =
+type alias Input =
     { date : Date
     , start : String
     , stop : String
@@ -46,7 +77,7 @@ saveExpected expected input =
     { input | expected = expected }
 
 
-reportToInput : Date -> Report -> ReportInput
+reportToInput : Date -> Report -> Input
 reportToInput date report =
     let
         format getter =
@@ -55,7 +86,7 @@ reportToInput date report =
                 |> Maybe.map showAsHoursAndMinutes
                 |> Maybe.withDefault ""
     in
-    ReportInput
+    Input
         date
         (format getStart)
         (format getEnd)
@@ -71,7 +102,7 @@ type alias Report =
     }
 
 
-emptyReport =
+empty =
     Report Nothing Nothing Nothing Nothing
 
 
@@ -244,8 +275,8 @@ isValidTimeInput time =
             False
 
 
-parseReportInput : ReportInput -> Report
-parseReportInput report =
+parseInput : Input -> Report
+parseInput report =
     Report
         (parseTime report.start)
         (parseTime report.stop)
@@ -253,7 +284,7 @@ parseReportInput report =
         (parseTime report.expected)
 
 
-inputOk : ReportInput -> Bool
+inputOk : Input -> Bool
 inputOk =
     List.isEmpty << inputErrors
 
@@ -266,11 +297,11 @@ checkStartBeforeStop start stop =
         []
 
 
-inputErrors : ReportInput -> List String
+inputErrors : Input -> List String
 inputErrors input =
     let
         report =
-            parseReportInput input
+            parseInput input
 
         startBeforeStopError =
             case ( parseTime input.start, parseTime input.stop ) of
@@ -306,8 +337,8 @@ inputErrors input =
         ++ tooMuchPause
 
 
-encodeReport : Int -> Report -> Encode.Value
-encodeReport ratadie report =
+encode : Int -> Report -> Encode.Value
+encode ratadie report =
     let
         maybeEncode name maybeValue =
             case maybeValue of
@@ -340,7 +371,7 @@ decodeReport =
         (maybeDecodeInt "expected")
 
 
-type alias ReportDict =
+type alias Reports =
     Dict Int Report
 
 
@@ -348,17 +379,17 @@ noReports =
     Dict.empty
 
 
-reportsToList : ReportDict -> List ( Date, Report )
+reportsToList : Reports -> List ( Date, Report )
 reportsToList reports =
     reports
         |> Dict.toList
         |> List.map (Tuple.mapFirst Date.fromRataDie)
 
 
-encodeReports : ReportDict -> Encode.Value
+encodeReports : Reports -> Encode.Value
 encodeReports reports =
-    Dict.filter (\key value -> value /= emptyReport) reports
-        |> Dict.map encodeReport
+    Dict.filter (\key value -> value /= empty) reports
+        |> Dict.map encode
         |> Dict.values
         |> Encode.list identity
 
@@ -376,12 +407,12 @@ decodeReportsPerDay =
     Decode.list decodeReportWithDate
 
 
-decodeReports : Decode.Decoder ReportDict
+decodeReports : Decode.Decoder Reports
 decodeReports =
     Decode.map Dict.fromList decodeReportsPerDay
 
 
-runningTotal : ReportDict -> Date -> Minutes
+runningTotal : Reports -> Date -> Minutes
 runningTotal reports date =
     let
         before reportForDay _ =
@@ -399,30 +430,30 @@ runningTotal reports date =
     List.foldl sum 0 reportsUntil
 
 
-saveReport : ReportInput -> ReportDict -> ReportDict
-saveReport reportInput reports =
-    Dict.insert (Date.toRataDie reportInput.date) (parseReportInput reportInput) reports
+saveInput : Input -> Reports -> Reports
+saveInput reportInput reports =
+    Dict.insert (Date.toRataDie reportInput.date) (parseInput reportInput) reports
 
 
-getReport : ReportDict -> Date -> Maybe Report
+getReport : Reports -> Date -> Maybe Report
 getReport reports date =
     Dict.get (Date.toRataDie date) reports
 
 
-getReportOrEmpty : ReportDict -> Date -> Report
+getReportOrEmpty : Reports -> Date -> Report
 getReportOrEmpty reports date =
     Maybe.withDefault
-        emptyReport
+        empty
         (getReport reports date)
 
 
-defaultInput : Date -> ReportInput
+defaultInput : Date -> Input
 defaultInput date =
-    ReportInput date "" "" "" "08:00"
+    Input date "" "" "" "08:00"
 
 
-getReportInput : ReportDict -> Date -> ReportInput
-getReportInput reports date =
+getInput : Reports -> Date -> Input
+getInput reports date =
     getReport reports date
         |> Maybe.map (reportToInput date)
         |> Maybe.withDefault (defaultInput date)

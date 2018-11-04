@@ -4,7 +4,7 @@ module Storage exposing
     )
 
 import Http
-import Report exposing (ReportDict)
+import Report exposing (Reports)
 
 
 authHeader : String -> Http.Header
@@ -12,7 +12,7 @@ authHeader token =
     Http.header "Authorization" token
 
 
-saveReports : String -> String -> ReportDict -> (Result Http.Error () -> msg) -> Cmd msg
+saveReports : String -> String -> Reports -> (Result Http.Error () -> msg) -> Cmd msg
 saveReports url token reports message =
     Http.request
         { method = "POST"
@@ -26,7 +26,7 @@ saveReports url token reports message =
         |> Http.send message
 
 
-loadReports : String -> String -> (Result Http.Error ReportDict -> msg) -> Cmd msg
+loadReports : String -> String -> (Result Http.Error Reports -> msg) -> Cmd msg
 loadReports url token message =
     Http.request
         { method = "GET"

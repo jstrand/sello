@@ -7,8 +7,8 @@ import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
 import Http
-import Report exposing (..)
-import Storage exposing (loadReports, saveReports)
+import Report exposing (Minutes, Report, Reports)
+import Storage
 import Task
 import Time
 
@@ -21,8 +21,8 @@ type AppStatus
 
 
 type alias Model =
-    { reports : ReportDict
-    , editing : Maybe ReportInput
+    { reports : Reports
+    , editing : Maybe Report.Input
     , status : AppStatus
     , showDate : Date
     , showInterval : Date.Unit
@@ -42,7 +42,7 @@ type Msg
     | InputPause String
     | InputExpected String
     | SaveResult (Result Http.Error ())
-    | LoadResult (Result Http.Error ReportDict)
+    | LoadResult (Result Http.Error Reports)
     | SetInterval Date.Unit
     | PreviousInterval
     | NextInterval
@@ -52,16 +52,16 @@ type Msg
     | NoOp
 
 
-startReportInput model date =
-    { model | editing = Just (getReportInput model.reports date) }
+startInput model date =
+    { model | editing = Just (Report.getInput model.reports date) }
 
 
-cancelReportInput model =
+cancelInput model =
     { model | editing = Nothing }
 
 
-saveReportInput : Model -> Model
-saveReportInput model =
+saveInput : Model -> Model
+saveInput model =
     case model.editing of
         Nothing ->
             model
@@ -69,7 +69,7 @@ saveReportInput model =
         Just input ->
             { model
                 | editing = Nothing
-                , reports = saveReport input model.reports
+                , reports = Report.saveInput input model.reports
             }
 
 
@@ -84,8 +84,27 @@ saveField updateF model =
             }
 
 
+describeError : Http.Error -> String
+describeError error =
+    case error of
+        Http.BadUrl url ->
+            "Cannot read from " ++ url
+
+        Http.Timeout ->
+            "Something took too long!"
+
+        Http.NetworkError ->
+            "Somethings up with the internet!"
+
+        Http.BadStatus response ->
+            "Somethings up with the server!"
+
+        Http.BadPayload message response ->
+            "Somethings really up with the server! " ++ message
+
+
 failWith error model =
-    ( { model | status = Failure (Debug.toString error) }, Cmd.none )
+    ( { model | status = Failure error }, Cmd.none )
 
 
 moveInterval : Int -> Model -> Model
@@ -112,48 +131,48 @@ update msg model =
             ( model, Cmd.none )
 
         StartEdit date ->
-            ( startReportInput model date, Task.attempt (\_ -> NoOp) (Dom.focus "start") )
+            ( startInput model date, Task.attempt (\_ -> NoOp) (Dom.focus "start") )
 
         CancelEdit ->
-            ( cancelReportInput model, Cmd.none )
+            ( cancelInput model, Cmd.none )
 
         SaveEdit ->
             let
                 newModel =
-                    saveReportInput model
+                    saveInput model
             in
-            ( { newModel | status = Saving }, saveReports newModel.url newModel.token newModel.reports SaveResult )
+            ( { newModel | status = Saving }, Storage.saveReports newModel.url newModel.token newModel.reports SaveResult )
 
         InputStart start ->
-            ( saveField (saveStart start) model, Cmd.none )
+            ( saveField (Report.saveStart start) model, Cmd.none )
 
         InputStop stop ->
-            ( saveField (saveStop stop) model, Cmd.none )
+            ( saveField (Report.saveStop stop) model, Cmd.none )
 
         InputPause pause ->
-            ( saveField (savePause pause) model, Cmd.none )
+            ( saveField (Report.savePause pause) model, Cmd.none )
 
         InputExpected expected ->
-            ( saveField (saveExpected expected) model, Cmd.none )
+            ( saveField (Report.saveExpected expected) model, Cmd.none )
 
         SaveResult (Ok _) ->
             ( { model | status = Ready }, Cmd.none )
 
         SaveResult (Err error) ->
-            failWith error model
+            failWith (describeError error) model
 
         LoadResult (Ok reports) ->
             ( { model | reports = reports, status = Ready }, Cmd.none )
 
         LoadResult (Err (Http.BadStatus description)) ->
             if description.status.code == 404 then
-                ( model, saveReports model.url model.token model.reports SaveResult )
+                ( model, Storage.saveReports model.url model.token model.reports SaveResult )
 
             else
                 failWith description.status.message model
 
         LoadResult (Err error) ->
-            failWith error model
+            failWith (describeError error) model
 
         SetInterval interval ->
             ( { model | showInterval = interval }, Cmd.none )
@@ -316,17 +335,17 @@ viewTimeInputField event value id =
         []
 
 
-editDay : ReportInput -> String -> Html Msg
+editDay : Report.Input -> String -> Html Msg
 editDay input total =
     let
         inputOk =
-            inputErrors input |> List.isEmpty
+            Report.inputErrors input |> List.isEmpty
 
         potentialReport =
-            parseReportInput input
+            Report.parseInput input
 
         workedTime =
-            potentialReport |> getWorkedMinutes
+            potentialReport |> Report.getWorkedMinutes
     in
     Html.tr []
         [ textCell <| Date.toIsoString input.date
@@ -346,13 +365,13 @@ viewOrEditDay : Model -> Date -> Html Msg
 viewOrEditDay model day =
     let
         report =
-            getReportOrEmpty model.reports day
+            Report.getReportOrEmpty model.reports day
 
         isToday =
             model.today == day
 
         totalValue reports date =
-            runningTotal reports date |> Report.showAsHoursAndMinutes
+            Report.runningTotal reports date |> Report.showAsHoursAndMinutes
 
         viewDayOrEmpty readOnly =
             viewDay isToday readOnly day (totalValue model.reports day) report
@@ -364,10 +383,10 @@ viewOrEditDay model day =
         Just input ->
             let
                 reportsWithEdit =
-                    saveReport input model.reports
+                    Report.saveInput input model.reports
 
                 total =
-                    runningTotal reportsWithEdit day |> Report.showAsHoursAndMinutes
+                    Report.runningTotal reportsWithEdit day |> Report.showAsHoursAndMinutes
             in
             if day == input.date then
                 editDay input total
@@ -651,7 +670,7 @@ init ( url, token ) =
         fakeDate
         url
         token
-    , Cmd.batch [ loadReports url token LoadResult, getTodaysDate ]
+    , Cmd.batch [ Storage.loadReports url token LoadResult, getTodaysDate ]
     )
 
 
