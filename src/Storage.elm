@@ -6,6 +6,8 @@ module Storage exposing
     )
 
 import Http
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Preferences exposing (Preferences)
 import Report exposing (Reports)
 
@@ -15,57 +17,59 @@ authHeader token =
     Http.header "Authorization" token
 
 
-saveReports : String -> String -> Reports -> (Result Http.Error () -> msg) -> Cmd msg
-saveReports url token reports message =
+load : String -> String -> Decode.Decoder result -> (Result Http.Error result -> msg) -> Cmd msg
+load url token decoder message =
+    Http.request
+        { method = "GET"
+        , url = url
+        , headers = [ authHeader token ]
+        , body = Http.emptyBody
+        , expect = Http.expectJson decoder
+        , timeout = Nothing
+        , withCredentials = False
+        }
+        |> Http.send message
+
+
+save : String -> String -> payload -> (payload -> Encode.Value) -> (Result Http.Error () -> msg) -> Cmd msg
+save url token payload encode message =
     Http.request
         { method = "POST"
-        , url = url ++ "/reports"
+        , url = url
         , headers = [ authHeader token ]
-        , body = Http.jsonBody (Report.encodeReports reports)
+        , body = Http.jsonBody (encode payload)
         , expect = Http.expectStringResponse (\_ -> Ok ())
         , timeout = Nothing
         , withCredentials = False
         }
         |> Http.send message
+
+
+reportsUrl : String -> String
+reportsUrl url =
+    url ++ "/reports"
+
+
+saveReports : String -> String -> Reports -> (Result Http.Error () -> msg) -> Cmd msg
+saveReports url token reports message =
+    save (reportsUrl url) token reports Report.encodeReports message
 
 
 loadReports : String -> String -> (Result Http.Error Reports -> msg) -> Cmd msg
 loadReports url token message =
-    Http.request
-        { method = "GET"
-        , url = url ++ "/reports"
-        , headers = [ authHeader token ]
-        , body = Http.emptyBody
-        , expect = Http.expectJson Report.decodeReports
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.send message
+    load (reportsUrl url) token Report.decodeReports message
+
+
+preferencesUrl : String -> String
+preferencesUrl url =
+    url ++ "/preferences"
 
 
 savePreferences : String -> String -> Preferences -> (Result Http.Error () -> msg) -> Cmd msg
 savePreferences url token preferences message =
-    Http.request
-        { method = "POST"
-        , url = url ++ "/preferences"
-        , headers = [ authHeader token ]
-        , body = Http.jsonBody (Preferences.encode preferences)
-        , expect = Http.expectStringResponse (\_ -> Ok ())
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.send message
+    save (preferencesUrl url) token preferences Preferences.encode message
 
 
 loadPreferences : String -> String -> (Result Http.Error Preferences -> msg) -> Cmd msg
 loadPreferences url token message =
-    Http.request
-        { method = "GET"
-        , url = url ++ "/preferences"
-        , headers = [ authHeader token ]
-        , body = Http.emptyBody
-        , expect = Http.expectJson Preferences.decode
-        , timeout = Nothing
-        , withCredentials = False
-        }
-        |> Http.send message
+    load (preferencesUrl url) token Preferences.decode message
