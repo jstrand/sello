@@ -1,7 +1,9 @@
 module Preferences exposing
     ( Preferences
     , allDays
+    , decode
     , default
+    , encode
     , isDaySelected
     , shouldShowDate
     , toggleDay
@@ -9,6 +11,8 @@ module Preferences exposing
     )
 
 import Date exposing (Date)
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Time
 
 
@@ -139,3 +143,29 @@ weekdayName weekday =
 
         Time.Sun ->
             "Sun"
+
+
+encode : Preferences -> Encode.Value
+encode preferences =
+    Encode.object
+        [ ( "mon", Encode.bool preferences.weekdays.mon )
+        , ( "tue", Encode.bool preferences.weekdays.tue )
+        , ( "wed", Encode.bool preferences.weekdays.wed )
+        , ( "thu", Encode.bool preferences.weekdays.thu )
+        , ( "fri", Encode.bool preferences.weekdays.fri )
+        , ( "sat", Encode.bool preferences.weekdays.sat )
+        , ( "sun", Encode.bool preferences.weekdays.sun )
+        ]
+
+
+decode : Decode.Decoder Preferences
+decode =
+    Decode.map7 WeekdaySelection
+        (Decode.field "mon" Decode.bool)
+        (Decode.field "tue" Decode.bool)
+        (Decode.field "wed" Decode.bool)
+        (Decode.field "thu" Decode.bool)
+        (Decode.field "fri" Decode.bool)
+        (Decode.field "sat" Decode.bool)
+        (Decode.field "sun" Decode.bool)
+        |> Decode.map Preferences
