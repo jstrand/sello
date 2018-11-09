@@ -43,7 +43,8 @@ type Msg
     | InputPause String
     | InputExpected String
     | SaveResult (Result Http.Error ())
-    | LoadResult (Result Http.Error Reports)
+    | LoadReports (Result Http.Error Reports)
+    | LoadPreferences (Result Http.Error Preferences)
     | SetInterval Date.Unit
     | PreviousInterval
     | NextInterval
@@ -162,18 +163,25 @@ update msg model =
         SaveResult (Err error) ->
             failWith (describeError error) model
 
-        LoadResult (Ok reports) ->
+        LoadReports (Ok reports) ->
             ( { model | reports = reports, status = Ready }, Cmd.none )
 
-        LoadResult (Err (Http.BadStatus description)) ->
+        LoadReports (Err (Http.BadStatus description)) ->
             if description.status.code == 404 then
                 ( model, Storage.saveReports model.url model.token model.reports SaveResult )
 
             else
                 failWith description.status.message model
 
-        LoadResult (Err error) ->
+        LoadReports (Err error) ->
             failWith (describeError error) model
+
+        LoadPreferences (Ok preferences) ->
+            ( { model | preferences = preferences }, Cmd.none )
+
+        -- Ingore errors for preferences, it's non-essential
+        LoadPreferences (Err error) ->
+            ( model, Cmd.none )
 
         SetInterval interval ->
             ( { model | showInterval = interval }, Cmd.none )
@@ -191,7 +199,11 @@ update msg model =
             ( model, getTodaysDate )
 
         ToggleWeekday day ->
-            ( toggleWeekday day model, Cmd.none )
+            let
+                newModel =
+                    toggleWeekday day model
+            in
+            ( newModel, Storage.savePreferences model.url model.token newModel.preferences SaveResult )
 
 
 toggleWeekday : Time.Weekday -> Model -> Model
@@ -630,7 +642,10 @@ init ( url, token ) =
         fakeDate
         url
         token
-    , Cmd.batch [ Storage.loadReports url token LoadResult, getTodaysDate ]
+    , Cmd.batch
+        [ Storage.loadReports url token LoadReports
+        , Storage.loadPreferences url token LoadPreferences
+        , getTodaysDate ]
     )
 
 
