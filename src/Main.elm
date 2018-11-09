@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
 import Http
+import Preferences exposing (Preferences)
 import Report exposing (Minutes, Report, Reports)
 import Storage
 import Task
@@ -26,7 +27,7 @@ type alias Model =
     , status : AppStatus
     , showDate : Date
     , showInterval : Date.Unit
-    , showDays : List Time.Weekday
+    , preferences : Preferences
     , today : Date
     , url : String
     , token : String
@@ -193,25 +194,9 @@ update msg model =
             ( toggleWeekday day model, Cmd.none )
 
 
-showingDay =
-    List.member
-
-
-shouldShowDate : List Time.Weekday -> Date -> Bool
-shouldShowDate showDays date =
-    showingDay (Date.weekday date) showDays
-
-
-removeDay day =
-    List.filter (\e -> e /= day)
-
-
+toggleWeekday : Time.Weekday -> Model -> Model
 toggleWeekday day model =
-    if showingDay day model.showDays then
-        { model | showDays = removeDay day model.showDays }
-
-    else
-        { model | showDays = day :: model.showDays }
+    { model | preferences = Preferences.toggleDay day model.preferences }
 
 
 editCell readOnly day =
@@ -507,34 +492,10 @@ separator =
     Html.text " "
 
 
-weekdayName weekday =
-    case weekday of
-        Time.Mon ->
-            "Mon"
-
-        Time.Tue ->
-            "Tue"
-
-        Time.Wed ->
-            "Wed"
-
-        Time.Thu ->
-            "Thu"
-
-        Time.Fri ->
-            "Fri"
-
-        Time.Sat ->
-            "Sat"
-
-        Time.Sun ->
-            "Sun"
-
-
-weekdayButton selected weekday =
+weekdayButton preferences weekday =
     let
         class =
-            if List.member weekday selected then
+            if Preferences.isDaySelected weekday preferences then
                 "btn-dark"
 
             else
@@ -545,25 +506,24 @@ weekdayButton selected weekday =
         , Att.class class
         , Events.onClick (ToggleWeekday weekday)
         ]
-        [ Html.text (weekdayName weekday) ]
+        [ Html.text (Preferences.weekdayName weekday) ]
 
 
-weekdayButtons : List Time.Weekday -> Html Msg
-weekdayButtons weekdays =
+weekdayButtons : Preferences -> Html Msg
+weekdayButtons preferences =
     Html.div
         [ Att.class "btn-group" ]
-        (List.map (weekdayButton weekdays)
-            [ Time.Mon, Time.Tue, Time.Wed, Time.Thu, Time.Fri, Time.Sat, Time.Sun ]
-        )
+        (List.map (weekdayButton preferences) Preferences.allDays)
 
 
+viewNavigation : Model -> Html Msg
 viewNavigation model =
     Html.div [ Att.class "toolbar" ]
         [ moveButtons model
         , separator
         , intervalButtons model.showInterval
         , separator
-        , weekdayButtons model.showDays
+        , weekdayButtons model.preferences
         ]
 
 
@@ -601,7 +561,7 @@ datesInInterval model =
             Date.add Date.Days 1 dayInInterval |> Date.ceiling interval
     in
     Date.range Date.Day 1 start stop
-        |> List.filter (shouldShowDate model.showDays)
+        |> List.filter (Preferences.shouldShowDate model.preferences)
 
 
 viewReports : Model -> List (Html Msg)
@@ -666,7 +626,7 @@ init ( url, token ) =
         Loading
         fakeDate
         Date.Weeks
-        [ Time.Mon, Time.Tue, Time.Wed, Time.Thu, Time.Fri ]
+        Preferences.default
         fakeDate
         url
         token
