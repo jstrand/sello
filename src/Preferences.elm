@@ -1,55 +1,80 @@
 module Preferences exposing
     ( Preferences
     , allDays
-    , weekdayName
-    , shouldShowDate
-    , isDaySelected
-    , toggleDay
     , default
+    , isDaySelected
+    , shouldShowDate
+    , toggleDay
+    , weekdayName
     )
 
-
-import Time
 import Date exposing (Date)
+import Time
 
 
 type alias WeekdaySelection =
-    { mon: Bool
-    , tue: Bool
-    , wed: Bool
-    , thu: Bool
-    , fri: Bool
-    , sat: Bool
-    , sun: Bool
+    { mon : Bool
+    , tue : Bool
+    , wed : Bool
+    , thu : Bool
+    , fri : Bool
+    , sat : Bool
+    , sun : Bool
     }
 
 
 isSelected : Time.Weekday -> WeekdaySelection -> Bool
 isSelected weekday selection =
     case weekday of
-        Time.Mon -> selection.mon
-        Time.Tue -> selection.tue
-        Time.Wed -> selection.wed
-        Time.Thu -> selection.thu
-        Time.Fri -> selection.fri
-        Time.Sat -> selection.sat
-        Time.Sun -> selection.sun
+        Time.Mon ->
+            selection.mon
+
+        Time.Tue ->
+            selection.tue
+
+        Time.Wed ->
+            selection.wed
+
+        Time.Thu ->
+            selection.thu
+
+        Time.Fri ->
+            selection.fri
+
+        Time.Sat ->
+            selection.sat
+
+        Time.Sun ->
+            selection.sun
 
 
 toggleSelected : Time.Weekday -> WeekdaySelection -> WeekdaySelection
 toggleSelected weekday selection =
     case weekday of
-        Time.Mon -> { selection | mon = not selection.mon }
-        Time.Tue -> { selection | tue = not selection.tue }
-        Time.Wed -> { selection | wed = not selection.wed }
-        Time.Thu -> { selection | thu = not selection.thu }
-        Time.Fri -> { selection | fri = not selection.fri }
-        Time.Sat -> { selection | sat = not selection.sat }
-        Time.Sun -> { selection | sun = not selection.sun }
+        Time.Mon ->
+            { selection | mon = not selection.mon }
+
+        Time.Tue ->
+            { selection | tue = not selection.tue }
+
+        Time.Wed ->
+            { selection | wed = not selection.wed }
+
+        Time.Thu ->
+            { selection | thu = not selection.thu }
+
+        Time.Fri ->
+            { selection | fri = not selection.fri }
+
+        Time.Sat ->
+            { selection | sat = not selection.sat }
+
+        Time.Sun ->
+            { selection | sun = not selection.sun }
 
 
 type alias Preferences =
-    { weekdays: WeekdaySelection
+    { weekdays : WeekdaySelection
     }
 
 
