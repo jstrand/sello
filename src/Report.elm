@@ -7,6 +7,7 @@ module Report exposing
     , defaultInput
     , encode
     , encodeReports
+    , getDiff
     , getDiffResult
     , getEnd
     , getExpected

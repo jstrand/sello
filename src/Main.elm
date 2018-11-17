@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes as Att
 import Html.Events as Events
 import Http
+import List.Extra exposing (scanl, zip)
 import Preferences exposing (Preferences)
 import Report exposing (Minutes, Report, Reports)
 import Storage
@@ -358,8 +359,8 @@ editDay input total =
         ]
 
 
-viewOrEditDay : Model -> Date -> Html Msg
-viewOrEditDay model day =
+viewOrEditDay : Model -> ( Date, Int ) -> Html Msg
+viewOrEditDay model ( day, total ) =
     let
         report =
             Report.getReportOrEmpty model.reports day
@@ -367,11 +368,11 @@ viewOrEditDay model day =
         isToday =
             model.today == day
 
-        totalValue reports date =
-            Report.runningTotal reports date |> Report.showAsHoursAndMinutes
+        totalStr =
+            Report.showAsHoursAndMinutes total
 
         viewDayOrEmpty readOnly =
-            viewDay isToday readOnly day (totalValue model.reports day) report
+            viewDay isToday readOnly day totalStr report
     in
     case model.editing of
         Nothing ->
@@ -381,15 +382,12 @@ viewOrEditDay model day =
             let
                 reportsWithEdit =
                     Report.saveInput input model.reports
-
-                total =
-                    Report.runningTotal reportsWithEdit day |> Report.showAsHoursAndMinutes
             in
             if day == input.date then
-                editDay input total
+                editDay input totalStr
 
             else
-                viewDay isToday True day total report
+                viewDay isToday True day totalStr report
 
 
 timeColumnHeader caption =
@@ -573,19 +571,49 @@ datesInInterval model =
             Date.add Date.Days 1 dayInInterval |> Date.ceiling interval
     in
     Date.range Date.Day 1 start stop
-        |> List.filter (Preferences.shouldShowDate model.preferences)
 
 
 viewReports : Model -> List (Html Msg)
 viewReports model =
+    let
+        dates =
+            datesInInterval model
+
+        previousDay =
+            Date.add Date.Days -1
+
+        dateBeforeInterval =
+            Maybe.map previousDay (List.head dates)
+
+        totalBefore =
+            Maybe.map (Report.runningTotal model.reports) dateBeforeInterval |> Maybe.withDefault 0
+
+        getDiff date =
+            Report.getReportOrEmpty model.reports date
+                |> Report.getDiff
+                |> Maybe.withDefault 0
+
+        diffs =
+            List.map getDiff dates
+
+        accumulatedDiffs =
+            scanl (+) totalBefore diffs |> List.tail |> Maybe.withDefault []
+
+        datesWithSum =
+            zip dates accumulatedDiffs
+
+        shouldShowDate ( date, _ ) =
+            Preferences.shouldShowDate model.preferences date
+
+        filteredDays =
+            List.filter shouldShowDate datesWithSum
+    in
     [ viewNavigation model
     , Html.table
         [ Att.class "table"
         , Att.style "max-width" "1200px"
         ]
-        (reportHeaders
-            ++ List.map (viewOrEditDay model) (datesInInterval model)
-        )
+        (reportHeaders ++ List.map (viewOrEditDay model) filteredDays)
     ]
 
 
@@ -645,7 +673,8 @@ init ( url, token ) =
     , Cmd.batch
         [ Storage.loadReports url token LoadReports
         , Storage.loadPreferences url token LoadPreferences
-        , getTodaysDate ]
+        , getTodaysDate
+        ]
     )
 
 
